@@ -4,9 +4,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/PoorMercymain/bannerify/internal/bannerify/repository/mocks"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/PoorMercymain/bannerify/internal/bannerify/repository/mocks"
 )
 
 func TestMigrations(t *testing.T) {

@@ -37,7 +37,6 @@ func Logger() *logger {
 	})
 
 	if err != nil {
-		fmt.Println(err.Error())
 		panic(fmt.Errorf("logger.Logger: %w", err))
 	}
 

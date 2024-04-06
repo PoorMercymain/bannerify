@@ -10,14 +10,16 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/PoorMercymain/bannerify/internal/bannerify/config"
-	"github.com/PoorMercymain/bannerify/internal/bannerify/handlers"
-	"github.com/PoorMercymain/bannerify/internal/bannerify/repository"
-	"github.com/PoorMercymain/bannerify/internal/bannerify/service"
-	"github.com/PoorMercymain/bannerify/pkg/logger"
 	"github.com/caarlos0/env/v6"
 	"github.com/golang-migrate/migrate/v4"
 	"go.uber.org/zap"
+
+	"github.com/PoorMercymain/bannerify/internal/bannerify/config"
+	"github.com/PoorMercymain/bannerify/internal/bannerify/handlers"
+	"github.com/PoorMercymain/bannerify/internal/bannerify/middleware"
+	"github.com/PoorMercymain/bannerify/internal/bannerify/repository"
+	"github.com/PoorMercymain/bannerify/internal/bannerify/service"
+	"github.com/PoorMercymain/bannerify/pkg/logger"
 )
 
 func main() {
@@ -26,7 +28,6 @@ func main() {
 		logger.Logger().Fatalln("Failed to parse env: %v", err)
 	}
 
-	fmt.Println("logs/" + cfg.LogFilePath)
 	logger.SetLogFile("logs/" + cfg.LogFilePath)
 
 	m, err := migrate.New("file://"+cfg.MigrationsPath, cfg.DSN())
@@ -48,13 +49,22 @@ func main() {
 
 	logger.Logger().Infoln("Postgres connection pool created")
 
-	r := repository.NewBanner(repository.NewPostgres(pool))
+	pg := repository.NewPostgres(pool)
+
+	r := repository.NewBanner(pg)
 	s := service.NewBanner(r)
 	h := handlers.NewBanner(s)
 
+	ar := repository.NewAuthorization(pg)
+	as := service.NewAuthorization(ar)
+	ah := handlers.NewAuthorization(as, cfg.JWTKey)
+
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("GET /ping", h.Ping)
+	mux.Handle("GET /ping", middleware.Log(middleware.AdminRequired(http.HandlerFunc(h.Ping), ah.JWTKey)))
+
+	mux.Handle("POST /register", middleware.Log(http.HandlerFunc(ah.Register)))
+	mux.Handle("POST /aquire-token", middleware.Log(http.HandlerFunc(ah.LogIn)))
 
 	server := &http.Server{
 		Addr:     fmt.Sprintf("%s:%d", cfg.ServiceHost, cfg.ServicePort),
