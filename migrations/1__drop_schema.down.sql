@@ -1,0 +1,7 @@
+BEGIN;
+
+DROP TABLE IF EXISTS banners;
+
+DROP TABLE IF EXISTS feature_tag;
+
+COMMIT;
