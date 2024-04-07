@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	appErrors "github.com/PoorMercymain/bannerify/errors"
@@ -30,6 +31,146 @@ func (h *banner) Ping(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *banner) GetBanner(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+	const logErrPrefix = "handlers.GetBanner:"
+
+	tagIDStr := r.URL.Query().Get("tag_id")
+	featureIDStr := r.URL.Query().Get("feature_id")
+
+	if tagIDStr == "" || featureIDStr == "" {
+		errwriter.WriteHTTPError(w, appErrors.ErrTagOrFeatureNotProvided, http.StatusBadRequest, logErrPrefix)
+		return
+	}
+
+	tagID, err := strconv.Atoi(tagIDStr)
+	if err != nil {
+		errwriter.WriteHTTPError(w, appErrors.ErrTagIsNotANumber, http.StatusBadRequest, logErrPrefix)
+		return
+	}
+
+	featureID, err := strconv.Atoi(featureIDStr)
+	if err != nil {
+		errwriter.WriteHTTPError(w, appErrors.ErrFeatureIsNotANumber, http.StatusBadRequest, logErrPrefix)
+		return
+	}
+
+	banner, err := h.srv.GetBanner(r.Context(), tagID, featureID)
+	if err != nil {
+		if errors.Is(err, appErrors.ErrBannerNotFound) {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		w.WriteHeader(http.StatusInternalServerError)
+		logger.Logger().Errorln(logErrPrefix, err.Error())
+		return
+	}
+
+	w.Header().Add("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, err = w.Write([]byte(banner))
+	if err != nil {
+		logger.Logger().Errorln(logErrPrefix, err.Error())
+	}
+}
+
+func (h *banner) ListBanners(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+	const logErrPrefix = "handlers.ListBanners:"
+
+	featureIDStr := r.URL.Query().Get("feature_id")
+	tagIDStr := r.URL.Query().Get("tag_id")
+	limitStr := r.URL.Query().Get("limit")
+	offsetStr := r.URL.Query().Get("offset")
+
+	if limitStr == "" {
+		limitStr = "15"
+	}
+
+	if offsetStr == "" {
+		offsetStr = "0"
+	}
+
+	if featureIDStr == "" {
+		featureIDStr = "-1"
+	} else if featureIDStr == "-1" {
+		errwriter.WriteHTTPError(w, appErrors.ErrFeatureNotInRange, http.StatusBadRequest, logErrPrefix)
+		return
+	}
+
+	if tagIDStr == "" {
+		tagIDStr = "-1"
+	} else if tagIDStr == "-1" {
+		errwriter.WriteHTTPError(w, appErrors.ErrFeatureNotInRange, http.StatusBadRequest, logErrPrefix)
+		return
+	}
+
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil {
+		errwriter.WriteHTTPError(w, appErrors.ErrLimitIsNotANumber, http.StatusBadRequest, logErrPrefix)
+		return
+	}
+
+	if limit < 1 || limit > 100 {
+		errwriter.WriteHTTPError(w, appErrors.ErrLimitNotInRange, http.StatusBadRequest, logErrPrefix)
+		return
+	}
+
+	offset, err := strconv.Atoi(offsetStr)
+	if err != nil {
+		errwriter.WriteHTTPError(w, appErrors.ErrOffsetIsNotANumber, http.StatusBadRequest, logErrPrefix)
+		return
+	}
+
+	if offset < 0 {
+		errwriter.WriteHTTPError(w, appErrors.ErrOffsetNotInRange, http.StatusBadRequest, logErrPrefix)
+		return
+	}
+
+	featureID, err := strconv.Atoi(featureIDStr)
+	if err != nil {
+		errwriter.WriteHTTPError(w, appErrors.ErrFeatureIsNotANumber, http.StatusBadRequest, logErrPrefix)
+		return
+	}
+
+	if featureID < 1 && featureID != -1 {
+		errwriter.WriteHTTPError(w, appErrors.ErrFeatureNotInRange, http.StatusBadRequest, logErrPrefix)
+		return
+	}
+
+	tagID, err := strconv.Atoi(tagIDStr)
+	if err != nil {
+		errwriter.WriteHTTPError(w, appErrors.ErrTagIsNotANumber, http.StatusBadRequest, logErrPrefix)
+		return
+	}
+
+	if tagID < 1 && tagID != -1 {
+		errwriter.WriteHTTPError(w, appErrors.ErrTagNotInRange, http.StatusBadRequest, logErrPrefix)
+		return
+	}
+
+	banners, err := h.srv.ListBanners(r.Context(), tagID, featureID, limit, offset)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		logger.Logger().Errorln(logErrPrefix, err.Error())
+		return
+	}
+
+	w.Header().Add("Content-Type", "application/json")
+	if len(banners) == 0 {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	
+	w.WriteHeader(http.StatusOK)
+
+	err = json.NewEncoder(w).Encode(banners)
+	if err != nil {
+		logger.Logger().Errorln(logErrPrefix, err)
+	}
 }
 
 type authorization struct {
@@ -73,14 +214,14 @@ func (h *authorization) Register(w http.ResponseWriter, r *http.Request) {
 		}
 
 		logger.Logger().Errorln(logErrPrefix, err)
-		errwriter.WriteHTTPError(w, appErrors.ErrSomethingWentWrong, http.StatusInternalServerError, logErrPrefix)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	tokenStr, err := jwt.CreateJWT(isAdmin, []byte(h.JWTKey), time.Now().Add(24*time.Hour))
 	if err != nil {
 		logger.Logger().Errorln(logErrPrefix, err)
-		errwriter.WriteHTTPError(w, appErrors.ErrSomethingWentWrong, http.StatusInternalServerError, logErrPrefix)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
@@ -125,7 +266,7 @@ func (h *authorization) LogIn(w http.ResponseWriter, r *http.Request) {
 		}
 
 		logger.Logger().Errorln(logErrPrefix, err)
-		errwriter.WriteHTTPError(w, appErrors.ErrSomethingWentWrong, http.StatusInternalServerError, logErrPrefix)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
@@ -137,7 +278,7 @@ func (h *authorization) LogIn(w http.ResponseWriter, r *http.Request) {
 		}
 
 		logger.Logger().Errorln(logErrPrefix, err)
-		errwriter.WriteHTTPError(w, appErrors.ErrSomethingWentWrong, http.StatusInternalServerError, logErrPrefix)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
@@ -145,7 +286,8 @@ func (h *authorization) LogIn(w http.ResponseWriter, r *http.Request) {
 	tokenStr, err := jwt.CreateJWT(isAdmin, []byte(h.JWTKey), time.Now().Add(24*time.Hour))
 	if err != nil {
 		logger.Logger().Errorln(logErrPrefix, err)
-		errwriter.WriteHTTPError(w, appErrors.ErrSomethingWentWrong, http.StatusInternalServerError, logErrPrefix)
+
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 

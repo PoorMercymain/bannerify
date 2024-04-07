@@ -66,6 +66,9 @@ func main() {
 	mux.Handle("POST /register", middleware.Log(http.HandlerFunc(ah.Register)))
 	mux.Handle("POST /aquire-token", middleware.Log(http.HandlerFunc(ah.LogIn)))
 
+	mux.Handle("GET /user_banner", middleware.Log(middleware.AuthorizationRequired(http.HandlerFunc(h.GetBanner), ah.JWTKey)))
+	mux.Handle("GET /banner", middleware.Log(middleware.AdminRequired(http.HandlerFunc(h.ListBanners), ah.JWTKey)))
+
 	server := &http.Server{
 		Addr:     fmt.Sprintf("%s:%d", cfg.ServiceHost, cfg.ServicePort),
 		ErrorLog: log.New(logger.Logger(), "", 0),
