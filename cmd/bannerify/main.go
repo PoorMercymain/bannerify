@@ -68,6 +68,9 @@ func main() {
 
 	mux.Handle("GET /user_banner", middleware.Log(middleware.AuthorizationRequired(http.HandlerFunc(h.GetBanner), ah.JWTKey)))
 	mux.Handle("GET /banner", middleware.Log(middleware.AdminRequired(http.HandlerFunc(h.ListBanners), ah.JWTKey)))
+	mux.Handle("GET /banner_versions/{banner_id}", middleware.Log(middleware.AdminRequired(http.HandlerFunc(h.ListVersions), ah.JWTKey)))
+	mux.Handle("PATCH /banner_versions/choose/{banner_id}", middleware.Log(middleware.AdminRequired(http.HandlerFunc(h.ChooseVersion), ah.JWTKey)))
+	mux.Handle("POST /banner", middleware.Log(middleware.AdminRequired(http.HandlerFunc(h.CreateBanner), ah.JWTKey)))
 
 	server := &http.Server{
 		Addr:     fmt.Sprintf("%s:%d", cfg.ServiceHost, cfg.ServicePort),

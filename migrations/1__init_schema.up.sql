@@ -1,32 +1,64 @@
 BEGIN;
 
-CREATE TABLE IF NOT EXISTS auth (
+CREATE TABLE IF NOT EXISTS users (
     login TEXT PRIMARY KEY,
     hash TEXT NOT NULL,
     is_admin BOOLEAN DEFAULT FALSE
 );
 
 CREATE TABLE IF NOT EXISTS banners (
-    banner_id SERIAL PRIMARY KEY
+    banner_id SERIAL PRIMARY KEY,
+    chosen_version_id INT NULL
 );
+INSERT INTO banners DEFAULT VALUES;
 
 CREATE TABLE IF NOT EXISTS banner_versions (
-    version_id SERIAL,
+    version_id SERIAL PRIMARY KEY,
     banner_id INT NOT NULL,
+    feature INT NOT NULL,
     data TEXT NOT NULL,
-    is_active BOOLEAN DEFAULT TRUE,
-    chosen_version BOOLEAN DEFAULT TRUE,
+    is_active BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (banner_id) REFERENCES banners(banner_id) ON DELETE CASCADE,
-    PRIMARY KEY (version_id, banner_id)
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS tags_features_banner (
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'fk_chosen_version'
+    ) THEN
+        ALTER TABLE banners
+            ADD CONSTRAINT fk_chosen_version
+            FOREIGN KEY (chosen_version_id)
+            REFERENCES banner_versions(version_id)
+            ON DELETE SET NULL;
+    END IF;
+END
+$$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'fk_banner_id'
+    ) THEN
+        ALTER TABLE banner_versions
+            ADD CONSTRAINT fk_banner_id
+            FOREIGN KEY (banner_id)
+            REFERENCES banners(banner_id)
+            ON DELETE CASCADE;
+    END IF;
+END
+$$;
+
+CREATE TABLE banner_version_tags (
+    version_id INT NOT NULL,
     tag INT NOT NULL,
-    feature INT NOT NULL,
-    banner_id INT NOT NULL,
-    PRIMARY KEY (tag, feature),
-    FOREIGN KEY (banner_id) REFERENCES banners(banner_id) ON DELETE CASCADE
+    FOREIGN KEY (version_id) REFERENCES banner_versions(version_id) ON DELETE CASCADE,
+    PRIMARY KEY (version_id, tag)
 );
+
 COMMIT;

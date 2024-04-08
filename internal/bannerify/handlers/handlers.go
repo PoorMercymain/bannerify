@@ -164,11 +164,178 @@ func (h *banner) ListBanners(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	
+
 	w.WriteHeader(http.StatusOK)
 
 	err = json.NewEncoder(w).Encode(banners)
 	if err != nil {
+		logger.Logger().Errorln(logErrPrefix, err)
+	}
+}
+
+func (h *banner) ListVersions(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+	const logErrPrefix = "handlers.ListVersions:"
+
+	bannerIDStr := r.PathValue("banner_id")
+	limitStr := r.URL.Query().Get("limit")
+	offsetStr := r.URL.Query().Get("offset")
+
+	if limitStr == "" {
+		limitStr = "3"
+	}
+
+	if offsetStr == "" {
+		offsetStr = "0"
+	}
+
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil {
+		errwriter.WriteHTTPError(w, appErrors.ErrLimitIsNotANumber, http.StatusBadRequest, logErrPrefix)
+		return
+	}
+
+	offset, err := strconv.Atoi(offsetStr)
+	if err != nil {
+		errwriter.WriteHTTPError(w, appErrors.ErrOffsetIsNotANumber, http.StatusBadRequest, logErrPrefix)
+		return
+	}
+
+	if bannerIDStr == "" {
+		errwriter.WriteHTTPError(w, appErrors.ErrNoBannerIDProvided, http.StatusBadRequest, logErrPrefix)
+		return
+	}
+
+	bannerID, err := strconv.Atoi(bannerIDStr)
+	if err != nil {
+		errwriter.WriteHTTPError(w, appErrors.ErrBannerIDIsNotANumber, http.StatusBadRequest, logErrPrefix)
+		return
+	}
+
+	if limit < 0 || limit > 100 {
+		errwriter.WriteHTTPError(w, appErrors.ErrLimitNotInRange, http.StatusBadRequest, logErrPrefix)
+		return
+	}
+
+	if offset < 0 {
+		errwriter.WriteHTTPError(w, appErrors.ErrOffsetNotInRange, http.StatusBadRequest, logErrPrefix)
+		return
+	}
+
+	versions, err := h.srv.ListVersions(r.Context(), bannerID, limit, offset)
+	if err != nil {
+		errwriter.WriteHTTPError(w, err, http.StatusInternalServerError, logErrPrefix)
+		return
+	}
+
+	if len(versions) == 0 {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	w.Header().Add("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	err = json.NewEncoder(w).Encode(versions)
+	if err != nil {
+		logger.Logger().Errorln(logErrPrefix, err)
+	}
+}
+
+func (h *banner) ChooseVersion(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+	const logErrPrefix = "handlers.ChooseVersion:"
+
+	bannerIDStr := r.PathValue("banner_id")
+	versionIDStr := r.URL.Query().Get("version_id")
+
+	if bannerIDStr == "" {
+		errwriter.WriteHTTPError(w, appErrors.ErrNoBannerIDProvided, http.StatusBadRequest, logErrPrefix)
+		return
+	}
+
+	if versionIDStr == "" {
+		errwriter.WriteHTTPError(w, appErrors.ErrNoVersionIDProvided, http.StatusBadRequest, logErrPrefix)
+		return
+	}
+
+	bannerID, err := strconv.Atoi(bannerIDStr)
+	if err != nil {
+		errwriter.WriteHTTPError(w, appErrors.ErrBannerIDIsNotANumber, http.StatusBadRequest, logErrPrefix)
+		return
+	}
+
+	versionID, err := strconv.Atoi(versionIDStr)
+	if err != nil {
+		errwriter.WriteHTTPError(w, appErrors.ErrVersionIDIsNotANumber, http.StatusBadRequest, logErrPrefix)
+		return
+	}
+
+	if bannerID < 1 {
+		errwriter.WriteHTTPError(w, appErrors.ErrBannerIDNotInRange, http.StatusBadRequest, logErrPrefix)
+		return
+	}
+
+	if versionID < 1 {
+		errwriter.WriteHTTPError(w, appErrors.ErrVersionIDNotInRange, http.StatusBadRequest, logErrPrefix)
+		return
+	}
+
+	err = h.srv.ChooseVersion(r.Context(), bannerID, versionID)
+	if err != nil {
+		if errors.Is(err, appErrors.ErrBannerNotFound) {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		if errors.Is(err, appErrors.ErrVersionNotFound) {
+			errwriter.WriteHTTPError(w, appErrors.ErrVersionNotFound, http.StatusBadRequest, logErrPrefix)
+			return
+		}
+
+		logger.Logger().Errorln(logErrPrefix, err.Error())
+		errwriter.WriteHTTPError(w, err, http.StatusInternalServerError, logErrPrefix)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *banner) CreateBanner(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+	const logErrPrefix = "handlers.CreateBanner:"
+
+	err := reqval.ValidateJSONRequest(r)
+	if err != nil {
+		errwriter.WriteHTTPError(w, err, http.StatusBadRequest, logErrPrefix)
+		return
+	}
+
+	d := json.NewDecoder(r.Body)
+	d.DisallowUnknownFields()
+
+	var banner domain.Banner
+	if err = d.Decode(&banner); err != nil {
+		errwriter.WriteHTTPError(w, err, http.StatusBadRequest, logErrPrefix)
+		return
+	}
+
+	if banner.Content == nil || banner.FeatureID == nil || banner.IsActive == nil || banner.TagIDs == nil {
+		errwriter.WriteHTTPError(w, appErrors.ErrBannerFieldNotProvided, http.StatusBadRequest, logErrPrefix)
+		return
+	}
+
+	bannerID, err := h.srv.CreateBanner(r.Context(), banner)
+	if err != nil {
+		logger.Logger().Errorln(logErrPrefix, err.Error())
+		errwriter.WriteHTTPError(w, err, http.StatusInternalServerError, logErrPrefix)
+		return
+	}
+
+	w.Header().Add("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+
+	if err = json.NewEncoder(w).Encode(domain.BannerID{ID: bannerID}); err != nil {
 		logger.Logger().Errorln(logErrPrefix, err)
 	}
 }
