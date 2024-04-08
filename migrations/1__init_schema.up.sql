@@ -10,7 +10,6 @@ CREATE TABLE IF NOT EXISTS banners (
     banner_id SERIAL PRIMARY KEY,
     chosen_version_id INT NULL
 );
-INSERT INTO banners DEFAULT VALUES;
 
 CREATE TABLE IF NOT EXISTS banner_versions (
     version_id SERIAL PRIMARY KEY,
