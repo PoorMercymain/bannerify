@@ -28,8 +28,8 @@ func (s *banner) Ping(ctx context.Context) error {
 	return nil
 }
 
-func (s *banner) GetBanner(ctx context.Context, tagID int, featureID int) (string, error) {
-	banner, err := s.repo.GetBanner(ctx, tagID, featureID)
+func (s *banner) GetBanner(ctx context.Context, tagID int, featureID int, isAdmin bool) (string, error) {
+	banner, err := s.repo.GetBanner(ctx, tagID, featureID, isAdmin)
 	if err != nil {
 		return "", fmt.Errorf("service.GetBanner: %w", err)
 	}
@@ -71,4 +71,13 @@ func (s *banner) CreateBanner(ctx context.Context, banner domain.Banner) (int, e
 	}
 
 	return bannerID, nil
+}
+
+func (s *banner) UpdateBanner(ctx context.Context, bannerID int, banner domain.Banner) error {
+	err := s.repo.UpdateBanner(ctx, bannerID, banner)
+	if err != nil {
+		return fmt.Errorf("service.UpdateBanner: %w", err)
+	}
+
+	return nil
 }

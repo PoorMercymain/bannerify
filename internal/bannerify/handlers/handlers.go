@@ -33,48 +33,63 @@ func (h *banner) Ping(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *banner) GetBanner(w http.ResponseWriter, r *http.Request) {
-	defer r.Body.Close()
-	const logErrPrefix = "handlers.GetBanner:"
+func (h *banner) GetBanner(jwtKey string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		const logErrPrefix = "handlers.GetBanner:"
 
-	tagIDStr := r.URL.Query().Get("tag_id")
-	featureIDStr := r.URL.Query().Get("feature_id")
+		tagIDStr := r.URL.Query().Get("tag_id")
+		featureIDStr := r.URL.Query().Get("feature_id")
 
-	if tagIDStr == "" || featureIDStr == "" {
-		errwriter.WriteHTTPError(w, appErrors.ErrTagOrFeatureNotProvided, http.StatusBadRequest, logErrPrefix)
-		return
-	}
-
-	tagID, err := strconv.Atoi(tagIDStr)
-	if err != nil {
-		errwriter.WriteHTTPError(w, appErrors.ErrTagIsNotANumber, http.StatusBadRequest, logErrPrefix)
-		return
-	}
-
-	featureID, err := strconv.Atoi(featureIDStr)
-	if err != nil {
-		errwriter.WriteHTTPError(w, appErrors.ErrFeatureIsNotANumber, http.StatusBadRequest, logErrPrefix)
-		return
-	}
-
-	banner, err := h.srv.GetBanner(r.Context(), tagID, featureID)
-	if err != nil {
-		if errors.Is(err, appErrors.ErrBannerNotFound) {
-			w.WriteHeader(http.StatusNotFound)
+		authToken := r.Header.Get("token")
+		if authToken == "" {
+			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 
-		w.WriteHeader(http.StatusInternalServerError)
-		logger.Logger().Errorln(logErrPrefix, err.Error())
-		return
+		isAdmin, err := jwt.CheckIsAdminInJWT(authToken, jwtKey)
+		if err != nil {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		if tagIDStr == "" || featureIDStr == "" {
+			errwriter.WriteHTTPError(w, appErrors.ErrTagOrFeatureNotProvided, http.StatusBadRequest, logErrPrefix)
+			return
+		}
+
+		tagID, err := strconv.Atoi(tagIDStr)
+		if err != nil {
+			errwriter.WriteHTTPError(w, appErrors.ErrTagIsNotANumber, http.StatusBadRequest, logErrPrefix)
+			return
+		}
+
+		featureID, err := strconv.Atoi(featureIDStr)
+		if err != nil {
+			errwriter.WriteHTTPError(w, appErrors.ErrFeatureIsNotANumber, http.StatusBadRequest, logErrPrefix)
+			return
+		}
+
+		banner, err := h.srv.GetBanner(r.Context(), tagID, featureID, isAdmin)
+		if err != nil {
+			if errors.Is(err, appErrors.ErrBannerNotFound) {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+
+			w.WriteHeader(http.StatusInternalServerError)
+			logger.Logger().Errorln(logErrPrefix, err.Error())
+			return
+		}
+
+		w.Header().Add("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, err = w.Write([]byte(banner))
+		if err != nil {
+			logger.Logger().Errorln(logErrPrefix, err.Error())
+		}
 	}
 
-	w.Header().Add("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_, err = w.Write([]byte(banner))
-	if err != nil {
-		logger.Logger().Errorln(logErrPrefix, err.Error())
-	}
 }
 
 func (h *banner) ListBanners(w http.ResponseWriter, r *http.Request) {
@@ -283,6 +298,11 @@ func (h *banner) ChooseVersion(w http.ResponseWriter, r *http.Request) {
 
 	err = h.srv.ChooseVersion(r.Context(), bannerID, versionID)
 	if err != nil {
+		if errors.Is(err, appErrors.ErrBannerTagUniqueViolation) {
+			errwriter.WriteHTTPError(w, appErrors.ErrBannerTagUniqueViolation, http.StatusConflict, logErrPrefix)
+			return
+		}
+
 		if errors.Is(err, appErrors.ErrBannerNotFound) {
 			w.WriteHeader(http.StatusNotFound)
 			return
@@ -338,6 +358,53 @@ func (h *banner) CreateBanner(w http.ResponseWriter, r *http.Request) {
 	if err = json.NewEncoder(w).Encode(domain.BannerID{ID: bannerID}); err != nil {
 		logger.Logger().Errorln(logErrPrefix, err)
 	}
+}
+
+func (h *banner) UpdateBanner(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+	const logErrPrefix = "handlers.UpdateBanner:"
+
+	bannerIDStr := r.PathValue("id")
+
+	if bannerIDStr == "" {
+		errwriter.WriteHTTPError(w, appErrors.ErrNoBannerIDProvided, http.StatusBadRequest, logErrPrefix)
+		return
+	}
+
+	bannerID, err := strconv.Atoi(bannerIDStr)
+	if err != nil {
+		errwriter.WriteHTTPError(w, appErrors.ErrBannerIDIsNotANumber, http.StatusBadRequest, logErrPrefix)
+		return
+	}
+
+	err = reqval.ValidateJSONRequest(r)
+	if err != nil {
+		errwriter.WriteHTTPError(w, err, http.StatusBadRequest, logErrPrefix)
+		return
+	}
+
+	d := json.NewDecoder(r.Body)
+	d.DisallowUnknownFields()
+
+	var banner domain.Banner
+	if err = d.Decode(&banner); err != nil {
+		errwriter.WriteHTTPError(w, err, http.StatusBadRequest, logErrPrefix)
+		return
+	}
+
+	if banner.Content == nil && banner.FeatureID == nil && banner.IsActive == nil && banner.TagIDs == nil {
+		errwriter.WriteHTTPError(w, appErrors.ErrNoBannerFieldsProvided, http.StatusBadRequest, logErrPrefix)
+		return
+	}
+
+	err = h.srv.UpdateBanner(r.Context(), bannerID, banner)
+	if err != nil {
+		logger.Logger().Errorln(logErrPrefix, err.Error())
+		errwriter.WriteHTTPError(w, err, http.StatusInternalServerError, logErrPrefix)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
 type authorization struct {

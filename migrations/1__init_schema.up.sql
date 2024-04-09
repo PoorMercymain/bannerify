@@ -60,4 +60,13 @@ CREATE TABLE banner_version_tags (
     PRIMARY KEY (version_id, tag)
 );
 
+CREATE TABLE IF NOT EXISTS chosen_versions (
+    banner_id INT NOT NULL,
+    version_id INT NOT NULL,
+    feature INT NOT NULL,
+    tag INT NOT NULL,
+    PRIMARY KEY (feature, tag),
+    FOREIGN KEY (version_id) REFERENCES banner_versions(version_id) ON DELETE CASCADE
+);
+
 COMMIT;

@@ -13,6 +13,7 @@ import (
 
 	appErrors "github.com/PoorMercymain/bannerify/errors"
 	"github.com/PoorMercymain/bannerify/internal/bannerify/domain"
+	"github.com/PoorMercymain/bannerify/pkg/logger"
 )
 
 var (
@@ -36,7 +37,7 @@ func (r *banner) Ping(ctx context.Context) error {
 	return nil
 }
 
-func (r *banner) GetBanner(ctx context.Context, tagID int, featureID int) (string, error) {
+func (r *banner) GetBanner(ctx context.Context, tagID int, featureID int, isAdmin bool) (string, error) {
 	const logErrPrefix = "repository.GetBanner: %w"
 
 	conn, err := r.db.Acquire(ctx)
@@ -46,7 +47,7 @@ func (r *banner) GetBanner(ctx context.Context, tagID int, featureID int) (strin
 	defer conn.Release()
 
 	var data string
-	err = conn.QueryRow(ctx, "SELECT bv.data FROM banner_versions bv JOIN banner_version_tags bvt ON bv.version_id = bvt.version_id WHERE bv.is_active = TRUE AND bv.feature = $1 AND bvt.tag = $2 AND bv.banner_id IN (SELECT banner_id FROM banners WHERE chosen_version_id = bv.version_id)", featureID, tagID).Scan(&data)
+	err = conn.QueryRow(ctx, "SELECT bv.data FROM banner_versions bv JOIN banner_version_tags bvt ON bv.version_id = bvt.version_id WHERE ((bv.is_active = TRUE) OR ($1 = TRUE)) AND bv.feature = $2 AND bvt.tag = $3 AND bv.banner_id IN (SELECT banner_id FROM banners WHERE chosen_version_id = bv.version_id)", isAdmin, featureID, tagID).Scan(&data)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", fmt.Errorf(logErrPrefix, appErrors.ErrBannerNotFound)
@@ -162,6 +163,31 @@ func (r *banner) ChooseVersion(ctx context.Context, bannerID int, versionID int)
 			return appErrors.ErrBannerNotFound
 		}
 
+		var featureID int
+		err = tx.QueryRow(ctx, "SELECT feature FROM banner_versions WHERE version_id = $1", versionID).Scan(&featureID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return appErrors.ErrVersionNotFound
+			}
+
+			return err
+		}
+
+		_, err = tx.Exec(ctx, "DELETE FROM chosen_versions WHERE banner_id = $1", bannerID)
+		if err != nil {
+			return err
+		}
+
+		_, err = tx.Exec(ctx, "INSERT INTO chosen_versions (banner_id, version_id, feature, tag) SELECT $1 AS banner_id, $2 AS version_id, $3 AS feature, bvt.tag FROM banner_version_tags bvt WHERE bvt.version_id = $2", bannerID, versionID, featureID)
+		if err != nil {
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr); pgErr.Code == pgerrcode.UniqueViolation {
+				return appErrors.ErrBannerTagUniqueViolation
+			}
+
+			return err
+		}
+
 		return nil
 	})
 
@@ -206,6 +232,18 @@ func (r *banner) CreateBanner(ctx context.Context, banner domain.Banner) (int, e
 			if tag.RowsAffected() == 0 {
 				return appErrors.ErrNoRowsAffected
 			}
+
+			logger.Logger().Infoln(tagID)
+			_, err = tx.Exec(ctx, "INSERT INTO chosen_versions (banner_id, version_id, feature, tag) VALUES ($1, $2, $3, $4)", bannerID, versionID, banner.FeatureID, tagID)
+			if err != nil {
+				var pgErr *pgconn.PgError
+				if errors.As(err, &pgErr); pgErr.Code == pgerrcode.UniqueViolation {
+					logger.Logger().Infoln(pgErr.Message)
+					return appErrors.ErrBannerTagUniqueViolation
+				}
+
+				return err
+			}
 		}
 
 		return nil
@@ -216,4 +254,80 @@ func (r *banner) CreateBanner(ctx context.Context, banner domain.Banner) (int, e
 	}
 
 	return bannerID, nil
+}
+
+func (r *banner) UpdateBanner(ctx context.Context, bannerID int, banner domain.Banner) error {
+	const logErrPrefix = "repository.UpdateBanner: %w"
+
+	var versionID int
+	err := r.db.WithTransaction(ctx, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx, "SELECT chosen_version_id FROM banners WHERE banner_id = $1", bannerID).Scan(&versionID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return appErrors.ErrBannerNotFound
+			}
+
+			return err
+		}
+
+		var newVersionID int
+		var contentStr *string
+		if banner.Content != nil {
+			str := string(banner.Content)
+			contentStr = &str
+		}
+
+		err = tx.QueryRow(ctx, "INSERT INTO banner_versions (banner_id, feature, data, is_active, created_at, updated_at) SELECT COALESCE($1, bv.banner_id), COALESCE($2, bv.feature), COALESCE($3, bv.data), COALESCE($4, bv.is_active), bv.created_at, CURRENT_TIMESTAMP FROM banner_versions bv WHERE bv.version_id = $5 RETURNING version_id", bannerID, banner.FeatureID, contentStr, banner.IsActive, versionID).Scan(&newVersionID)
+		if err != nil {
+			return err
+		}
+
+		_, err = tx.Exec(ctx, "DELETE FROM chosen_versions WHERE banner_id = $1", bannerID)
+		if err != nil {
+			return err
+		}
+
+		for _, tagID := range banner.TagIDs {
+			tag, err := tx.Exec(ctx, "INSERT INTO banner_version_tags (version_id, tag) VALUES ($1, $2)", newVersionID, tagID)
+			if err != nil {
+				return err
+			}
+
+			if tag.RowsAffected() == 0 {
+				return appErrors.ErrNoRowsAffected
+			}
+
+			_, err = tx.Exec(ctx, "INSERT INTO chosen_versions (banner_id, version_id, feature, tag) SELECT $1, $2, COALESCE($3, bv.feature), $4 FROM banner_versions bv WHERE bv.version_id = $5", bannerID, newVersionID, banner.FeatureID, tagID, versionID)
+			if err != nil {
+				var pgErr *pgconn.PgError
+				if errors.As(err, &pgErr); pgErr.Code == pgerrcode.UniqueViolation {
+					return appErrors.ErrBannerTagUniqueViolation
+				}
+
+				return err
+			}
+		}
+
+		tag, err := tx.Exec(ctx, "UPDATE banners SET chosen_version_id = $1 WHERE banner_id = $2", newVersionID, bannerID)
+		if err != nil {
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr); pgErr.Code == pgerrcode.ForeignKeyViolation {
+				return appErrors.ErrVersionNotFound
+			}
+
+			return err
+		}
+
+		if tag.RowsAffected() == 0 {
+			return appErrors.ErrBannerNotFound
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf(logErrPrefix, err)
+	}
+
+	return nil
 }
