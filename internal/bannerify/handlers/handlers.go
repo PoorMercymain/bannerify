@@ -33,25 +33,13 @@ func (h *banner) Ping(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *banner) GetBanner(jwtKey string) http.HandlerFunc {
+func (h *banner) GetBanner(isAdmin bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
 		const logErrPrefix = "handlers.GetBanner:"
 
 		tagIDStr := r.URL.Query().Get("tag_id")
 		featureIDStr := r.URL.Query().Get("feature_id")
-
-		authToken := r.Header.Get("token")
-		if authToken == "" {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-
-		isAdmin, err := jwt.CheckIsAdminInJWT(authToken, jwtKey)
-		if err != nil {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
 
 		if tagIDStr == "" || featureIDStr == "" {
 			errwriter.WriteHTTPError(w, appErrors.ErrTagOrFeatureNotProvided, http.StatusBadRequest, logErrPrefix)

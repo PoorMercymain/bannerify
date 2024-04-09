@@ -4,17 +4,12 @@ import (
 	"net/http"
 
 	"github.com/PoorMercymain/bannerify/pkg/jwt"
+	appErrors "github.com/PoorMercymain/bannerify/errors"
 )
 
 func AdminRequired(next http.Handler, jwtKey string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		authToken := r.Header.Get("token")
-		if authToken == "" {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-
-		isAdmin, err := jwt.CheckIsAdminInJWT(authToken, jwtKey)
+		isAdmin, err := checkIsAdmin(r, jwtKey)
 		if err != nil {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
@@ -31,13 +26,7 @@ func AdminRequired(next http.Handler, jwtKey string) http.Handler {
 
 func AuthorizationRequired(next http.Handler, jwtKey string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		authToken := r.Header.Get("token")
-		if authToken == "" {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-
-		_, err := jwt.CheckIsAdminInJWT(authToken, jwtKey)
+		_, err := checkIsAdmin(r, jwtKey)
 		if err != nil {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
@@ -45,4 +34,30 @@ func AuthorizationRequired(next http.Handler, jwtKey string) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func ProvideIsAdmin(next func(bool) http.HandlerFunc, jwtKey string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		isAdmin, err := checkIsAdmin(r, jwtKey)
+		if err != nil {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		next(isAdmin).ServeHTTP(w, r)
+	})
+}
+
+func checkIsAdmin(r *http.Request, jwtKey string) (bool, error) {
+	authToken := r.Header.Get("token")
+	if authToken == "" {
+		return false, appErrors.ErrNoTokenProvided
+	}
+
+	isAdmin, err := jwt.CheckIsAdminInJWT(authToken, jwtKey)
+	if err != nil {
+		return false, appErrors.ErrTokenIsInvalid
+	}
+
+	return isAdmin, nil
 }
