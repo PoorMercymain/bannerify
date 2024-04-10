@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -50,8 +51,12 @@ func main() {
 	logger.Logger().Infoln("Postgres connection pool created")
 
 	pg := repository.NewPostgres(pool)
+	redis, err := repository.NewCache(cfg.CachePort)
+	if err != nil {
+		logger.Logger().Fatalln(zap.Error(err))
+	}
 
-	r := repository.NewBanner(pg)
+	r := repository.NewBanner(pg, redis)
 	s := service.NewBanner(r)
 	h := handlers.NewBanner(s)
 
@@ -59,12 +64,15 @@ func main() {
 	as := service.NewAuthorization(ar)
 	ah := handlers.NewAuthorization(as, cfg.JWTKey)
 
+	var wg sync.WaitGroup
+	deleteCtx, cancelDeleteCtx := context.WithCancel(context.Background())
+
 	mux := http.NewServeMux()
 
 	mux.Handle("GET /ping", middleware.Log(middleware.AdminRequired(http.HandlerFunc(h.Ping), ah.JWTKey)))
 
 	mux.Handle("POST /register", middleware.Log(http.HandlerFunc(ah.Register)))
-	mux.Handle("POST /aquire-token", middleware.Log(http.HandlerFunc(ah.LogIn)))
+	mux.Handle("POST /acquire-token", middleware.Log(http.HandlerFunc(ah.LogIn)))
 
 	mux.Handle("GET /user_banner", middleware.Log(middleware.ProvideIsAdmin(h.GetBanner, ah.JWTKey)))
 	mux.Handle("GET /banner", middleware.Log(middleware.AdminRequired(http.HandlerFunc(h.ListBanners), ah.JWTKey)))
@@ -72,6 +80,8 @@ func main() {
 	mux.Handle("PATCH /banner_versions/choose/{banner_id}", middleware.Log(middleware.AdminRequired(http.HandlerFunc(h.ChooseVersion), ah.JWTKey)))
 	mux.Handle("POST /banner", middleware.Log(middleware.AdminRequired(http.HandlerFunc(h.CreateBanner), ah.JWTKey)))
 	mux.Handle("PATCH /banner/{id}", middleware.Log(middleware.AdminRequired(http.HandlerFunc(h.UpdateBanner), ah.JWTKey)))
+	mux.Handle("DELETE /banner/{id}", middleware.Log(middleware.AdminRequired(http.HandlerFunc(h.DeleteBannerByID), ah.JWTKey)))
+	mux.Handle("DELETE /banner", middleware.Log(middleware.AdminRequired(http.HandlerFunc(h.DeleteBannerByTagOrFeature(deleteCtx, &wg)), ah.JWTKey)))
 
 	server := &http.Server{
 		Addr:     fmt.Sprintf("%s:%d", cfg.ServiceHost, cfg.ServicePort),
@@ -99,6 +109,20 @@ func main() {
 
 	if err := server.Shutdown(ctx); err != nil {
 		logger.Logger().Fatalln("Server was forced to shutdown:", zap.Error(err))
+	}
+
+	waitGroupChan := make(chan struct{})
+	go func() {
+		wg.Wait()
+		waitGroupChan <- struct{}{}
+	}()
+
+	select {
+	case <-waitGroupChan:
+		logger.Logger().Infoln("All delete goroutines successfully finished")
+	case <-time.After(time.Second * 3):
+		cancelDeleteCtx()
+		logger.Logger().Infoln("Some of delete goroutines have not completed their job due to shutdown timeout")
 	}
 
 	logger.Logger().Infoln("Server was shut down")

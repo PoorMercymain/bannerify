@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/PoorMercymain/bannerify/internal/bannerify/domain"
 )
@@ -37,7 +38,7 @@ func (s *banner) GetBanner(ctx context.Context, tagID int, featureID int, isAdmi
 	return banner, nil
 }
 
-func (s *banner) ListBanners(ctx context.Context, tagID int, featureID int, limit int, offset int) ([]domain.BannerListElement, error) {
+func (s *banner) ListBanners(ctx context.Context, tagID *int, featureID *int, limit int, offset int) ([]domain.BannerListElement, error) {
 	banners, err := s.repo.ListBanners(ctx, tagID, featureID, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("service.ListBanners: %w", err)
@@ -77,6 +78,24 @@ func (s *banner) UpdateBanner(ctx context.Context, bannerID int, banner domain.B
 	err := s.repo.UpdateBanner(ctx, bannerID, banner)
 	if err != nil {
 		return fmt.Errorf("service.UpdateBanner: %w", err)
+	}
+
+	return nil
+}
+
+func (s *banner) DeleteBannerByID(ctx context.Context, bannerID int) error {
+	err := s.repo.DeleteBannerByID(ctx, bannerID)
+	if err != nil {
+		return fmt.Errorf("service.DeleteBannerByID: %w", err)
+	}
+
+	return nil
+}
+
+func (s *banner) DeleteBannerByTagOrFeature(ctx context.Context, deleteCtx context.Context, tagID *int, featureID *int, wg *sync.WaitGroup) error {
+	err := s.repo.DeleteBannerByTagOrFeature(ctx, deleteCtx, tagID, featureID, wg)
+	if err != nil {
+		return fmt.Errorf("service.DeleteBannerByTagOrFeature: %w", err)
 	}
 
 	return nil

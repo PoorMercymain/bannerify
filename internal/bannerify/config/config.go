@@ -12,6 +12,7 @@ type Config struct {
 	MigrationsPath   string `env:"MIGRATIONS_PATH" envDefault:"migrations"`
 	LogFilePath      string `env:"LOG_FILE_PATH" envDefault:"logfile.log"`
 	JWTKey           string `env:"JWT_KEY" envDefault:"notreallysecret"`
+	CachePort        int    `env:"REDIS_PORT" envDefault:"6379"`
 }
 
 func (c *Config) DSN() string {

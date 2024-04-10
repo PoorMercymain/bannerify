@@ -3,8 +3,8 @@ package middleware
 import (
 	"net/http"
 
-	"github.com/PoorMercymain/bannerify/pkg/jwt"
 	appErrors "github.com/PoorMercymain/bannerify/errors"
+	"github.com/PoorMercymain/bannerify/pkg/jwt"
 )
 
 func AdminRequired(next http.Handler, jwtKey string) http.Handler {

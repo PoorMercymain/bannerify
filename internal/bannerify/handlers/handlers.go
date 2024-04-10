@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	appErrors "github.com/PoorMercymain/bannerify/errors"
@@ -97,20 +99,6 @@ func (h *banner) ListBanners(w http.ResponseWriter, r *http.Request) {
 		offsetStr = "0"
 	}
 
-	if featureIDStr == "" {
-		featureIDStr = "-1"
-	} else if featureIDStr == "-1" {
-		errwriter.WriteHTTPError(w, appErrors.ErrFeatureNotInRange, http.StatusBadRequest, logErrPrefix)
-		return
-	}
-
-	if tagIDStr == "" {
-		tagIDStr = "-1"
-	} else if tagIDStr == "-1" {
-		errwriter.WriteHTTPError(w, appErrors.ErrFeatureNotInRange, http.StatusBadRequest, logErrPrefix)
-		return
-	}
-
 	limit, err := strconv.Atoi(limitStr)
 	if err != nil {
 		errwriter.WriteHTTPError(w, appErrors.ErrLimitIsNotANumber, http.StatusBadRequest, logErrPrefix)
@@ -133,26 +121,27 @@ func (h *banner) ListBanners(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	featureID, err := strconv.Atoi(featureIDStr)
-	if err != nil {
-		errwriter.WriteHTTPError(w, appErrors.ErrFeatureIsNotANumber, http.StatusBadRequest, logErrPrefix)
-		return
+	var featureID *int
+	var tagID *int
+
+	if featureIDStr != "" {
+		featureIDBuf, err := strconv.Atoi(featureIDStr)
+		if err != nil {
+			errwriter.WriteHTTPError(w, appErrors.ErrFeatureIsNotANumber, http.StatusBadRequest, logErrPrefix)
+			return
+		}
+
+		featureID = &featureIDBuf
 	}
 
-	if featureID < 1 && featureID != -1 {
-		errwriter.WriteHTTPError(w, appErrors.ErrFeatureNotInRange, http.StatusBadRequest, logErrPrefix)
-		return
-	}
+	if tagIDStr != "" {
+		tagIDBuf, err := strconv.Atoi(tagIDStr)
+		if err != nil {
+			errwriter.WriteHTTPError(w, appErrors.ErrTagIsNotANumber, http.StatusBadRequest, logErrPrefix)
+			return
+		}
 
-	tagID, err := strconv.Atoi(tagIDStr)
-	if err != nil {
-		errwriter.WriteHTTPError(w, appErrors.ErrTagIsNotANumber, http.StatusBadRequest, logErrPrefix)
-		return
-	}
-
-	if tagID < 1 && tagID != -1 {
-		errwriter.WriteHTTPError(w, appErrors.ErrTagNotInRange, http.StatusBadRequest, logErrPrefix)
-		return
+		tagID = &tagIDBuf
 	}
 
 	banners, err := h.srv.ListBanners(r.Context(), tagID, featureID, limit, offset)
@@ -335,6 +324,11 @@ func (h *banner) CreateBanner(w http.ResponseWriter, r *http.Request) {
 
 	bannerID, err := h.srv.CreateBanner(r.Context(), banner)
 	if err != nil {
+		if errors.Is(err, appErrors.ErrBannerTagUniqueViolation) {
+			errwriter.WriteHTTPError(w, appErrors.ErrBannerTagUniqueViolation, http.StatusBadRequest, logErrPrefix)
+			return
+		}
+
 		logger.Logger().Errorln(logErrPrefix, err.Error())
 		errwriter.WriteHTTPError(w, err, http.StatusInternalServerError, logErrPrefix)
 		return
@@ -393,6 +387,89 @@ func (h *banner) UpdateBanner(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+func (h *banner) DeleteBannerByID(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+	const logErrPrefix = "handlers.DeleteBannerByID:"
+
+	bannerIDStr := r.PathValue("id")
+
+	if bannerIDStr == "" {
+		errwriter.WriteHTTPError(w, appErrors.ErrNoBannerIDProvided, http.StatusBadRequest, logErrPrefix)
+		return
+	}
+
+	bannerID, err := strconv.Atoi(bannerIDStr)
+	if err != nil {
+		errwriter.WriteHTTPError(w, appErrors.ErrBannerIDIsNotANumber, http.StatusBadRequest, logErrPrefix)
+		return
+	}
+
+	err = h.srv.DeleteBannerByID(r.Context(), bannerID)
+	if err != nil {
+		if errors.Is(err, appErrors.ErrBannerNotFound) {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		logger.Logger().Errorln(logErrPrefix, err.Error())
+		errwriter.WriteHTTPError(w, err, http.StatusInternalServerError, logErrPrefix)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *banner) DeleteBannerByTagOrFeature(deleteCtx context.Context, wg *sync.WaitGroup) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		const logErrPrefix = "handlers.DeleteBannerByTagOrFeature:"
+
+		tagIDStr := r.URL.Query().Get("tag_id")
+		featureIDStr := r.URL.Query().Get("feature_id")
+
+		var tagID *int
+		if tagIDStr != "" {
+			tagIDbuf, err := strconv.Atoi(tagIDStr)
+			if err != nil {
+				errwriter.WriteHTTPError(w, appErrors.ErrTagIsNotANumber, http.StatusBadRequest, logErrPrefix)
+				return
+			}
+
+			tagID = &tagIDbuf
+		}
+
+		var featureID *int
+		if featureIDStr != "" {
+			featureIDbuf, err := strconv.Atoi(featureIDStr)
+			if err != nil {
+				errwriter.WriteHTTPError(w, appErrors.ErrFeatureIsNotANumber, http.StatusBadRequest, logErrPrefix)
+				return
+			}
+
+			featureID = &featureIDbuf
+		}
+
+		if tagID == nil && featureID == nil {
+			errwriter.WriteHTTPError(w, appErrors.ErrTagOrFeatureNotProvided, http.StatusBadRequest, logErrPrefix)
+			return
+		}
+
+		err := h.srv.DeleteBannerByTagOrFeature(r.Context(), deleteCtx, tagID, featureID, wg)
+		if err != nil {
+			if errors.Is(err, appErrors.ErrBannerNotFound) {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+
+			logger.Logger().Errorln(logErrPrefix, err.Error())
+			errwriter.WriteHTTPError(w, err, http.StatusInternalServerError, logErrPrefix)
+			return
+		}
+
+		w.WriteHeader(http.StatusAccepted)
+	}
 }
 
 type authorization struct {
