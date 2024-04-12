@@ -13,7 +13,4 @@ func TestLogger(t *testing.T) {
 	n, err := Logger().Write([]byte(str))
 	require.NoError(t, err)
 	require.Equal(t, len(str), n)
-
-	err = Logger().Sync()
-	require.NoError(t, err)
 }

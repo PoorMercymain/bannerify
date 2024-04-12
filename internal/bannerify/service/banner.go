@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"github.com/PoorMercymain/bannerify/internal/bannerify/domain"
 )
@@ -29,8 +28,8 @@ func (s *banner) Ping(ctx context.Context) error {
 	return nil
 }
 
-func (s *banner) GetBanner(ctx context.Context, tagID int, featureID int, isAdmin bool) (string, error) {
-	banner, err := s.repo.GetBanner(ctx, tagID, featureID, isAdmin)
+func (s *banner) GetBanner(ctx context.Context, tagID int, featureID int, isAdmin bool, dbRequired bool) (string, error) {
+	banner, err := s.repo.GetBanner(ctx, tagID, featureID, isAdmin, dbRequired)
 	if err != nil {
 		return "", fmt.Errorf("service.GetBanner: %w", err)
 	}
@@ -92,8 +91,8 @@ func (s *banner) DeleteBannerByID(ctx context.Context, bannerID int) error {
 	return nil
 }
 
-func (s *banner) DeleteBannerByTagOrFeature(ctx context.Context, deleteCtx context.Context, tagID *int, featureID *int, wg *sync.WaitGroup) error {
-	err := s.repo.DeleteBannerByTagOrFeature(ctx, deleteCtx, tagID, featureID, wg)
+func (s *banner) DeleteBannerByTagOrFeature(ctx context.Context, deleteCtx context.Context, tagID *int, featureID *int) error {
+	err := s.repo.DeleteBannerByTagOrFeature(ctx, deleteCtx, tagID, featureID)
 	if err != nil {
 		return fmt.Errorf("service.DeleteBannerByTagOrFeature: %w", err)
 	}

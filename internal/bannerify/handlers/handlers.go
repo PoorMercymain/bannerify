@@ -60,7 +60,17 @@ func (h *banner) GetBanner(isAdmin bool) http.HandlerFunc {
 			return
 		}
 
-		banner, err := h.srv.GetBanner(r.Context(), tagID, featureID, isAdmin)
+		var dbRequired bool
+		if r.Header.Get("use_last_revision") == "true" {
+			dbRequired = true
+		} else if r.Header.Get("use_last_revision") == "false" {
+			dbRequired = false
+		} else if r.Header.Get("use_last_revision") != "" {
+			errwriter.WriteHTTPError(w, appErrors.ErrUseLastRevisionNotBool, http.StatusBadRequest, logErrPrefix)
+			return
+		}
+
+		banner, err := h.srv.GetBanner(r.Context(), tagID, featureID, isAdmin, dbRequired)
 		if err != nil {
 			if errors.Is(err, appErrors.ErrBannerNotFound) {
 				w.WriteHeader(http.StatusNotFound)
@@ -79,7 +89,6 @@ func (h *banner) GetBanner(isAdmin bool) http.HandlerFunc {
 			logger.Logger().Errorln(logErrPrefix, err.Error())
 		}
 	}
-
 }
 
 func (h *banner) ListBanners(w http.ResponseWriter, r *http.Request) {
@@ -456,7 +465,7 @@ func (h *banner) DeleteBannerByTagOrFeature(deleteCtx context.Context, wg *sync.
 			return
 		}
 
-		err := h.srv.DeleteBannerByTagOrFeature(r.Context(), deleteCtx, tagID, featureID, wg)
+		err := h.srv.DeleteBannerByTagOrFeature(r.Context(), deleteCtx, tagID, featureID)
 		if err != nil {
 			if errors.Is(err, appErrors.ErrBannerNotFound) {
 				w.WriteHeader(http.StatusNotFound)

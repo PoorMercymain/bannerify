@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"golang.org/x/sync/semaphore"
 	"golang.org/x/sync/singleflight"
 
 	appErrors "github.com/PoorMercymain/bannerify/errors"
@@ -26,10 +27,12 @@ type banner struct {
 	db    *postgres
 	cache *cache
 	sf *singleflight.Group
+	sem *semaphore.Weighted
+	wg *sync.WaitGroup
 }
 
-func NewBanner(pg *postgres, cache *cache) *banner {
-	return &banner{db: pg, cache: cache, sf: &singleflight.Group{}}
+func NewBanner(pg *postgres, cache *cache, semCap int, wg *sync.WaitGroup) *banner {
+	return &banner{db: pg, cache: cache, sf: &singleflight.Group{}, sem: semaphore.NewWeighted(int64(semCap)), wg: wg}
 }
 
 func (r *banner) Ping(ctx context.Context) error {
@@ -41,19 +44,25 @@ func (r *banner) Ping(ctx context.Context) error {
 	return nil
 }
 
-func (r *banner) GetBanner(ctx context.Context, tagID int, featureID int, isAdmin bool) (string, error) {
+func (r *banner) GetBanner(ctx context.Context, tagID int, featureID int, isAdmin bool, dbRequired bool) (string, error) {
 	const logErrPrefix = "repository.GetBanner: %w"
+	singleflightKey := fmt.Sprintf("%d_%d_%t_%t", tagID, featureID, isAdmin, dbRequired)
 	cacheKey := fmt.Sprintf("%d_%d_%t", tagID, featureID, isAdmin)
 
-	res, cacheErr := r.cache.Get(ctx, cacheKey)
-	if cacheErr != nil {
-		data, err, _ := r.sf.Do(cacheKey, func() (interface{}, error) {
+	var res string
+	var cacheErr error
+	if !dbRequired {
+		res, cacheErr = r.cache.Get(ctx, cacheKey)
+	}
+
+	if cacheErr != nil || dbRequired {
+		data, err, _ := r.sf.Do(singleflightKey, func() (interface{}, error) {
 			data, err := r.getBanner(ctx, tagID, featureID, isAdmin, logErrPrefix)
 			if err != nil {
 				return "", err
 			}
 
-			if errors.Is(cacheErr, appErrors.ErrNotFoundInCache) {
+			if errors.Is(cacheErr, appErrors.ErrNotFoundInCache) || dbRequired {
 				cacheErr := r.cache.Set(ctx, cacheKey, data)
 				if cacheErr != nil {
 					cacheErr = fmt.Errorf(logErrPrefix, cacheErr)
@@ -393,7 +402,7 @@ func (r *banner) DeleteBannerByID(ctx context.Context, bannerID int) error {
 	return nil
 }
 
-func (r *banner) DeleteBannerByTagOrFeature(ctx context.Context, deleteCtx context.Context, tagID *int, featureID *int, wg *sync.WaitGroup) error {
+func (r *banner) DeleteBannerByTagOrFeature(ctx context.Context, deleteCtx context.Context, tagID *int, featureID *int) error {
 	const logErrPrefix = "repository.DeleteBannerByTagOrFeature: %w"
 
 	err := r.db.WithTransaction(ctx, func(tx pgx.Tx) error {
@@ -414,10 +423,17 @@ func (r *banner) DeleteBannerByTagOrFeature(ctx context.Context, deleteCtx conte
 		return fmt.Errorf(logErrPrefix, err)
 	}
 
-	wg.Add(1)
+	r.wg.Add(1)
 
 	go func() {
-		defer wg.Done()
+		defer r.wg.Done()
+
+		err = r.sem.Acquire(deleteCtx, 1)
+		if err != nil {
+			logger.Logger().Errorln(err.Error())
+			return
+		}
+		defer r.sem.Release(1)
 
 		err := r.db.WithTransaction(deleteCtx, func(tx pgx.Tx) error {
 			tag, err := tx.Exec(deleteCtx, "DELETE FROM banners WHERE banner_id IN (SELECT b.banner_id FROM banners b JOIN banner_versions bv ON b.chosen_version_id = bv.version_id LEFT JOIN banner_version_tags bvt ON bv.version_id = bvt.version_id WHERE ($1::INT IS NULL OR bv.feature = $1::INT) AND ($2::INT IS NULL OR bvt.tag = $2::INT))", featureID, tagID)

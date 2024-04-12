@@ -56,7 +56,9 @@ func main() {
 		logger.Logger().Fatalln(zap.Error(err))
 	}
 
-	r := repository.NewBanner(pg, redis)
+	var wg sync.WaitGroup
+	
+	r := repository.NewBanner(pg, redis, cfg.DeleteWorkersAmount, &wg)
 	s := service.NewBanner(r)
 	h := handlers.NewBanner(s)
 
@@ -64,7 +66,6 @@ func main() {
 	as := service.NewAuthorization(ar)
 	ah := handlers.NewAuthorization(as, cfg.JWTKey)
 
-	var wg sync.WaitGroup
 	deleteCtx, cancelDeleteCtx := context.WithCancel(context.Background())
 
 	mux := http.NewServeMux()

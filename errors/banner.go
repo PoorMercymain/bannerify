@@ -23,4 +23,5 @@ var (
 	ErrBannerFieldNotProvided   = errors.New("one or more banner json fields are not provided (tag_ids, feature_id, content and is_active required)")
 	ErrBannerTagUniqueViolation = errors.New("feature and tag pair of chosen banners cannot point to different banners")
 	ErrNoBannerFieldsProvided   = errors.New("no banner json fields provided (tag_ids or feature_id or content or is_active can be provided)")
+	ErrUseLastRevisionNotBool = errors.New("use_last_revision header is not bool (true/false)")
 )

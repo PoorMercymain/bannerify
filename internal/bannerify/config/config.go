@@ -13,6 +13,7 @@ type Config struct {
 	LogFilePath      string `env:"LOG_FILE_PATH" envDefault:"logfile.log"`
 	JWTKey           string `env:"JWT_KEY" envDefault:"notreallysecret"`
 	CachePort        int    `env:"REDIS_PORT" envDefault:"6379"`
+	DeleteWorkersAmount int `env:"DELETE_WORKERS_AMOUNT" envDefault:"4"`
 }
 
 func (c *Config) DSN() string {
