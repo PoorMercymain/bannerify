@@ -57,32 +57,49 @@ func main() {
 	}
 
 	var wg sync.WaitGroup
-	
-	r := repository.NewBanner(pg, redis, cfg.DeleteWorkersAmount, &wg)
-	s := service.NewBanner(r)
-	h := handlers.NewBanner(s)
 
-	ar := repository.NewAuthorization(pg)
-	as := service.NewAuthorization(ar)
-	ah := handlers.NewAuthorization(as, cfg.JWTKey)
+	pingProviderRepository := repository.NewPingProvider(pg)
+	getterRepository := repository.NewGetter(pg, redis)
+	versionerRepository := repository.NewVersioner(pg)
+	creatorRepository := repository.NewCreator(pg)
+	updaterRepository := repository.NewUpdater(pg)
+	deleterRepository := repository.NewDeleter(pg, &wg, cfg.DeleteWorkersAmount)
+
+	pingProviderService := service.NewPingProvider(pingProviderRepository)
+	getterService := service.NewGetter(getterRepository)
+	versionerService := service.NewVersioner(versionerRepository)
+	creatorService := service.NewCreator(creatorRepository)
+	updaterService := service.NewUpdater(updaterRepository)
+	deleterService := service.NewDeleter(deleterRepository)
+
+	pingProviderHandler := handlers.NewPingProvider(pingProviderService)
+	getterHandler := handlers.NewGetter(getterService)
+	versionerHandler := handlers.NewVersioner(versionerService)
+	creatorHandler := handlers.NewCreator(creatorService)
+	updaterHandler := handlers.NewUpdater(updaterService)
+	deleterHandler := handlers.NewDeleter(deleterService)
+
+	authRepository := repository.NewAuthorization(pg)
+	authService := service.NewAuthorization(authRepository)
+	authHandler := handlers.NewAuthorization(authService, cfg.JWTKey)
 
 	deleteCtx, cancelDeleteCtx := context.WithCancel(context.Background())
 
 	mux := http.NewServeMux()
 
-	mux.Handle("GET /ping", middleware.Log(middleware.AdminRequired(http.HandlerFunc(h.Ping), ah.JWTKey)))
+	mux.Handle("GET /ping", middleware.Log(middleware.AdminRequired(http.HandlerFunc(pingProviderHandler.Ping), authHandler.JWTKey)))
 
-	mux.Handle("POST /register", middleware.Log(http.HandlerFunc(ah.Register)))
-	mux.Handle("POST /acquire-token", middleware.Log(http.HandlerFunc(ah.LogIn)))
+	mux.Handle("POST /register", middleware.Log(http.HandlerFunc(authHandler.Register)))
+	mux.Handle("POST /acquire-token", middleware.Log(http.HandlerFunc(authHandler.LogIn)))
 
-	mux.Handle("GET /user_banner", middleware.Log(middleware.ProvideIsAdmin(h.GetBanner, ah.JWTKey)))
-	mux.Handle("GET /banner", middleware.Log(middleware.AdminRequired(http.HandlerFunc(h.ListBanners), ah.JWTKey)))
-	mux.Handle("GET /banner_versions/{banner_id}", middleware.Log(middleware.AdminRequired(http.HandlerFunc(h.ListVersions), ah.JWTKey)))
-	mux.Handle("PATCH /banner_versions/choose/{banner_id}", middleware.Log(middleware.AdminRequired(http.HandlerFunc(h.ChooseVersion), ah.JWTKey)))
-	mux.Handle("POST /banner", middleware.Log(middleware.AdminRequired(http.HandlerFunc(h.CreateBanner), ah.JWTKey)))
-	mux.Handle("PATCH /banner/{id}", middleware.Log(middleware.AdminRequired(http.HandlerFunc(h.UpdateBanner), ah.JWTKey)))
-	mux.Handle("DELETE /banner/{id}", middleware.Log(middleware.AdminRequired(http.HandlerFunc(h.DeleteBannerByID), ah.JWTKey)))
-	mux.Handle("DELETE /banner", middleware.Log(middleware.AdminRequired(http.HandlerFunc(h.DeleteBannerByTagOrFeature(deleteCtx, &wg)), ah.JWTKey)))
+	mux.Handle("GET /user_banner", middleware.Log(middleware.ProvideIsAdmin(getterHandler.GetBanner, authHandler.JWTKey)))
+	mux.Handle("GET /banner", middleware.Log(middleware.AdminRequired(http.HandlerFunc(getterHandler.ListBanners), authHandler.JWTKey)))
+	mux.Handle("GET /banner_versions/{banner_id}", middleware.Log(middleware.AdminRequired(http.HandlerFunc(versionerHandler.ListVersions), authHandler.JWTKey)))
+	mux.Handle("PATCH /banner_versions/choose/{banner_id}", middleware.Log(middleware.AdminRequired(http.HandlerFunc(versionerHandler.ChooseVersion), authHandler.JWTKey)))
+	mux.Handle("POST /banner", middleware.Log(middleware.AdminRequired(http.HandlerFunc(creatorHandler.CreateBanner), authHandler.JWTKey)))
+	mux.Handle("PATCH /banner/{id}", middleware.Log(middleware.AdminRequired(http.HandlerFunc(updaterHandler.UpdateBanner), authHandler.JWTKey)))
+	mux.Handle("DELETE /banner/{id}", middleware.Log(middleware.AdminRequired(http.HandlerFunc(deleterHandler.DeleteBannerByID), authHandler.JWTKey)))
+	mux.Handle("DELETE /banner", middleware.Log(middleware.AdminRequired(http.HandlerFunc(deleterHandler.DeleteBannerByTagOrFeature(deleteCtx, &wg)), authHandler.JWTKey)))
 
 	server := &http.Server{
 		Addr:     fmt.Sprintf("%s:%d", cfg.ServiceHost, cfg.ServicePort),

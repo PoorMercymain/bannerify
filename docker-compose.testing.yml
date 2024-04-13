@@ -65,4 +65,4 @@ services:
     environment:
       - "SERVICE_PORT:${SERVICE_PORT}"
       - "SERVICE_HOST:bannerify-e2e"
-    command: ["go", "test", "./...", "-count=1", "-cover"]
+    command: ["go", "test", "-tags", "e2e", "./...", "-count=1"]

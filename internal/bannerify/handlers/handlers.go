@@ -17,15 +17,15 @@ import (
 	"github.com/PoorMercymain/bannerify/pkg/reqval"
 )
 
-type banner struct {
-	srv domain.BannerService
+type pingProvider struct {
+	srv domain.BannerServicePingProvider
 }
 
-func NewBanner(srv domain.BannerService) *banner {
-	return &banner{srv: srv}
+func NewPingProvider(srv domain.BannerServicePingProvider) *pingProvider {
+	return &pingProvider{srv: srv}
 }
 
-func (h *banner) Ping(w http.ResponseWriter, r *http.Request) {
+func (h *pingProvider) Ping(w http.ResponseWriter, r *http.Request) {
 	err := h.srv.Ping(r.Context())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -35,7 +35,15 @@ func (h *banner) Ping(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *banner) GetBanner(isAdmin bool) http.HandlerFunc {
+type bannerGetter struct {
+	srv domain.BannerServiceGetter
+}
+
+func NewGetter(srv domain.BannerServiceGetter) *bannerGetter {
+	return &bannerGetter{srv: srv}
+}
+
+func (h *bannerGetter) GetBanner(isAdmin bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
 		const logErrPrefix = "handlers.GetBanner:"
@@ -91,7 +99,7 @@ func (h *banner) GetBanner(isAdmin bool) http.HandlerFunc {
 	}
 }
 
-func (h *banner) ListBanners(w http.ResponseWriter, r *http.Request) {
+func (h *bannerGetter) ListBanners(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	const logErrPrefix = "handlers.ListBanners:"
 
@@ -174,7 +182,15 @@ func (h *banner) ListBanners(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *banner) ListVersions(w http.ResponseWriter, r *http.Request) {
+type bannerVersioner struct {
+	srv domain.BannerServiceVersioner
+}
+
+func NewVersioner(srv domain.BannerServiceVersioner) *bannerVersioner {
+	return &bannerVersioner{srv: srv}
+}
+
+func (h *bannerVersioner) ListVersions(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	const logErrPrefix = "handlers.ListVersions:"
 
@@ -243,7 +259,7 @@ func (h *banner) ListVersions(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *banner) ChooseVersion(w http.ResponseWriter, r *http.Request) {
+func (h *bannerVersioner) ChooseVersion(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	const logErrPrefix = "handlers.ChooseVersion:"
 
@@ -289,13 +305,8 @@ func (h *banner) ChooseVersion(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if errors.Is(err, appErrors.ErrBannerNotFound) {
+		if errors.Is(err, appErrors.ErrBannerNotFound) || errors.Is(err, appErrors.ErrVersionNotFound) {
 			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-
-		if errors.Is(err, appErrors.ErrVersionNotFound) {
-			errwriter.WriteHTTPError(w, appErrors.ErrVersionNotFound, http.StatusBadRequest, logErrPrefix)
 			return
 		}
 
@@ -307,7 +318,15 @@ func (h *banner) ChooseVersion(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *banner) CreateBanner(w http.ResponseWriter, r *http.Request) {
+type bannerCreator struct {
+	srv domain.BannerServiceCreator
+}
+
+func NewCreator(srv domain.BannerServiceCreator) *bannerCreator {
+	return &bannerCreator{srv: srv}
+}
+
+func (h *bannerCreator) CreateBanner(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	const logErrPrefix = "handlers.CreateBanner:"
 
@@ -351,7 +370,15 @@ func (h *banner) CreateBanner(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *banner) UpdateBanner(w http.ResponseWriter, r *http.Request) {
+type bannerUpdater struct {
+	srv domain.BannerServiceUpdater
+}
+
+func NewUpdater(srv domain.BannerServiceUpdater) *bannerUpdater {
+	return &bannerUpdater{srv: srv}
+}
+
+func (h *bannerUpdater) UpdateBanner(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	const logErrPrefix = "handlers.UpdateBanner:"
 
@@ -398,7 +425,15 @@ func (h *banner) UpdateBanner(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (h *banner) DeleteBannerByID(w http.ResponseWriter, r *http.Request) {
+type bannerDeleter struct {
+	srv domain.BannerServiceDeleter
+}
+
+func NewDeleter(srv domain.BannerServiceDeleter) *bannerDeleter {
+	return &bannerDeleter{srv: srv}
+}
+
+func (h *bannerDeleter) DeleteBannerByID(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	const logErrPrefix = "handlers.DeleteBannerByID:"
 
@@ -430,7 +465,7 @@ func (h *banner) DeleteBannerByID(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *banner) DeleteBannerByTagOrFeature(deleteCtx context.Context, wg *sync.WaitGroup) http.HandlerFunc {
+func (h *bannerDeleter) DeleteBannerByTagOrFeature(deleteCtx context.Context, wg *sync.WaitGroup) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
 		const logErrPrefix = "handlers.DeleteBannerByTagOrFeature:"

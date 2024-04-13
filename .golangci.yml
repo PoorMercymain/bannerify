@@ -1,0 +1,56 @@
+run:
+  concurrency: 4
+  timeout: 5m
+  issues-exit-code: 1
+  tests: true
+  modules-download-mode: readonly
+  allow-parallel-runners: true
+  build-tags: ['e2e']
+
+output:
+  formats:
+    - format: checkstyle
+      path: report.xml
+    - format: colored-line-number
+
+linters:
+  enable-all: true
+  disable:
+    - nosnakecase
+    - golint
+    - structcheck
+    - deadcode
+    - scopelint
+    - exhaustivestruct
+    - interfacer
+    - ifshort
+    - maligned
+    - varcheck
+    - tagliatelle
+
+issues:
+  exclude-rules:
+  - path: ./
+    linters:
+    - typecheck
+
+linters-settings:
+  errcheck:
+    check-type-assertions: false
+    check-blank: true
+  gofmt:
+    simplify: true
+  goimports:
+    local-prefixes: github.com/PoorMercymain/bannerify
+  revive:
+    rules:
+      - name: var-naming
+        severity: warning
+      - name: errorf
+        severity: warning
+      - name: rangevalinloop
+        severity: warning
+      - name: exportloopref
+        severity: warning
+  lll:
+    line-length: 160

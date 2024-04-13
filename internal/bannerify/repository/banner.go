@@ -20,22 +20,18 @@ import (
 )
 
 var (
-	_ domain.BannerRepository = (*banner)(nil)
+	_ domain.BannerRepositoryPingProvider = (*pingProvider)(nil)
 )
 
-type banner struct {
-	db    *postgres
-	cache *cache
-	sf *singleflight.Group
-	sem *semaphore.Weighted
-	wg *sync.WaitGroup
+type pingProvider struct {
+	db *postgres
 }
 
-func NewBanner(pg *postgres, cache *cache, semCap int, wg *sync.WaitGroup) *banner {
-	return &banner{db: pg, cache: cache, sf: &singleflight.Group{}, sem: semaphore.NewWeighted(int64(semCap)), wg: wg}
+func NewPingProvider(pg *postgres) *pingProvider {
+	return &pingProvider{db: pg}
 }
 
-func (r *banner) Ping(ctx context.Context) error {
+func (r *pingProvider) Ping(ctx context.Context) error {
 	err := r.db.Ping(ctx)
 	if err != nil {
 		return fmt.Errorf("repository.Ping: %w", err)
@@ -44,7 +40,21 @@ func (r *banner) Ping(ctx context.Context) error {
 	return nil
 }
 
-func (r *banner) GetBanner(ctx context.Context, tagID int, featureID int, isAdmin bool, dbRequired bool) (string, error) {
+var (
+	_ domain.BannerRepositoryGetter = (*bannerGetter)(nil)
+)
+
+type bannerGetter struct {
+	db *postgres
+	cache *cache
+	sf *singleflight.Group
+}
+
+func NewGetter(pg *postgres, cache *cache) *bannerGetter {
+	return &bannerGetter{db: pg, cache: cache, sf: &singleflight.Group{}}
+}
+
+func (r *bannerGetter) GetBanner(ctx context.Context, tagID int, featureID int, isAdmin bool, dbRequired bool) (string, error) {
 	const logErrPrefix = "repository.GetBanner: %w"
 	singleflightKey := fmt.Sprintf("%d_%d_%t_%t", tagID, featureID, isAdmin, dbRequired)
 	cacheKey := fmt.Sprintf("%d_%d_%t", tagID, featureID, isAdmin)
@@ -86,7 +96,7 @@ func (r *banner) GetBanner(ctx context.Context, tagID int, featureID int, isAdmi
 	return res, nil
 }
 
-func (r *banner) getBanner(ctx context.Context, tagID int, featureID int, isAdmin bool, logErrPrefix string) (string, error) {
+func (r *bannerGetter) getBanner(ctx context.Context, tagID int, featureID int, isAdmin bool, logErrPrefix string) (string, error) {
 	conn, err := r.db.Acquire(ctx)
 	if err != nil {
 		return "", fmt.Errorf(logErrPrefix, err)
@@ -106,7 +116,7 @@ func (r *banner) getBanner(ctx context.Context, tagID int, featureID int, isAdmi
 	return data, nil
 }
 
-func (r *banner) ListBanners(ctx context.Context, tagID *int, featureID *int, limit int, offset int) ([]domain.BannerListElement, error) {
+func (r *bannerGetter) ListBanners(ctx context.Context, tagID *int, featureID *int, limit int, offset int) ([]domain.BannerListElement, error) {
 	const logErrPrefix = "repository.ListBanners: %w"
 
 	conn, err := r.db.Acquire(ctx)
@@ -149,7 +159,19 @@ func (r *banner) ListBanners(ctx context.Context, tagID *int, featureID *int, li
 	return banners, nil
 }
 
-func (r *banner) ListVersions(ctx context.Context, bannerID int, limit int, offset int) ([]domain.VersionListElement, error) {
+var (
+	_ domain.BannerRepositoryVersioner = (*bannerVersioner)(nil)
+)
+
+type bannerVersioner struct {
+	db *postgres
+}
+
+func NewVersioner(pg *postgres) *bannerVersioner {
+	return &bannerVersioner{db: pg}
+}
+
+func (r *bannerVersioner) ListVersions(ctx context.Context, bannerID int, limit int, offset int) ([]domain.VersionListElement, error) {
 	const logErrPrefix = "repository.ListVersions: %w"
 
 	conn, err := r.db.Acquire(ctx)
@@ -192,7 +214,7 @@ func (r *banner) ListVersions(ctx context.Context, bannerID int, limit int, offs
 	return versions, nil
 }
 
-func (r *banner) ChooseVersion(ctx context.Context, bannerID int, versionID int) error {
+func (r *bannerVersioner) ChooseVersion(ctx context.Context, bannerID int, versionID int) error {
 	const logErrPrefix = "repository.ChooseVersion: %w"
 
 	err := r.db.WithTransaction(ctx, func(tx pgx.Tx) error {
@@ -245,7 +267,19 @@ func (r *banner) ChooseVersion(ctx context.Context, bannerID int, versionID int)
 	return nil
 }
 
-func (r *banner) CreateBanner(ctx context.Context, banner domain.Banner) (int, error) {
+var (
+	_ domain.BannerRepositoryCreator = (*bannerCreator)(nil)
+)
+
+type bannerCreator struct {
+	db *postgres
+}
+
+func NewCreator(pg *postgres) *bannerCreator {
+	return &bannerCreator{db: pg}
+}
+
+func (r *bannerCreator) CreateBanner(ctx context.Context, banner domain.Banner) (int, error) {
 	const logErrPrefix = "repository.CreateBanner: %w"
 
 	var bannerID int
@@ -303,7 +337,19 @@ func (r *banner) CreateBanner(ctx context.Context, banner domain.Banner) (int, e
 	return bannerID, nil
 }
 
-func (r *banner) UpdateBanner(ctx context.Context, bannerID int, banner domain.Banner) error {
+var (
+	_ domain.BannerRepositoryUpdater = (*bannerUpdater)(nil)
+)
+
+type bannerUpdater struct {
+	db *postgres
+}
+
+func NewUpdater(pg *postgres) *bannerUpdater {
+	return &bannerUpdater{db: pg}
+}
+
+func (r *bannerUpdater) UpdateBanner(ctx context.Context, bannerID int, banner domain.Banner) error {
 	const logErrPrefix = "repository.UpdateBanner: %w"
 
 	var versionID int
@@ -398,7 +444,21 @@ func (r *banner) UpdateBanner(ctx context.Context, bannerID int, banner domain.B
 	return nil
 }
 
-func (r *banner) DeleteBannerByID(ctx context.Context, bannerID int) error {
+var (
+	_ domain.BannerRepositoryDeleter = (*bannerDeleter)(nil)
+)
+
+type bannerDeleter struct {
+	db *postgres
+	sem *semaphore.Weighted
+	wg *sync.WaitGroup
+}
+
+func NewDeleter(pg *postgres, wg *sync.WaitGroup, semCap int) *bannerDeleter {
+	return &bannerDeleter{db: pg, wg: wg, sem: semaphore.NewWeighted(int64(semCap))}
+}
+
+func (r *bannerDeleter) DeleteBannerByID(ctx context.Context, bannerID int) error {
 	const logErrPrefix = "repository.DeleteBanner: %w"
 
 	err := r.db.WithTransaction(ctx, func(tx pgx.Tx) error {
@@ -421,7 +481,7 @@ func (r *banner) DeleteBannerByID(ctx context.Context, bannerID int) error {
 	return nil
 }
 
-func (r *banner) DeleteBannerByTagOrFeature(ctx context.Context, deleteCtx context.Context, tagID *int, featureID *int) error {
+func (r *bannerDeleter) DeleteBannerByTagOrFeature(ctx context.Context, deleteCtx context.Context, tagID *int, featureID *int) error {
 	const logErrPrefix = "repository.DeleteBannerByTagOrFeature: %w"
 
 	err := r.db.WithTransaction(ctx, func(tx pgx.Tx) error {

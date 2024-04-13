@@ -1,3 +1,5 @@
+//go:build e2e
+
 package e2e
 
 import (
@@ -934,7 +936,7 @@ func TestChooseVersion(t *testing.T) {
 			route: "/banner_versions/choose/",
 			body: "",
 			headers: [][2]string{},
-			expectedStatus: http.StatusBadRequest,
+			expectedStatus: http.StatusNotFound,
 			requireParsing: false,
 			parsedBody: nil,
 		},

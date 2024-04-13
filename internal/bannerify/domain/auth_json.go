@@ -1,8 +1,8 @@
 package domain
 
 type AuthorizationData struct {
-	Login    string `json:"login" example:"login"`
-	Password string `json:"password" example:"password"`
+	Login    string `example:"login"    json:"login"`
+	Password string `example:"password" json:"password"`
 }
 
 type Token struct {
