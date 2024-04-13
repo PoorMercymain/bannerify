@@ -230,7 +230,7 @@ func (h *banner) ListVersions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(versions) == 0 {
-		w.WriteHeader(http.StatusNoContent)
+		w.WriteHeader(http.StatusNotFound)
 		return
 	}
 
@@ -512,6 +512,14 @@ func (h *authorization) Register(w http.ResponseWriter, r *http.Request) {
 	var isAdmin bool
 	if r.Header.Get("admin") == "true" {
 		isAdmin = true
+	} else if r.Header.Get("admin") != "false" && r.Header.Get("admin") != "" {
+		errwriter.WriteHTTPError(w, appErrors.ErrWrongAdminHeader, http.StatusBadRequest, logErrPrefix)
+		return
+	}
+
+	if authData.Login == "" || authData.Password == "" {
+		errwriter.WriteHTTPError(w, appErrors.ErrNoLoginOrPassword, http.StatusBadRequest, logErrPrefix)
+		return
 	}
 
 	err = h.srv.Register(r.Context(), authData.Login, authData.Password, isAdmin)
@@ -558,6 +566,11 @@ func (h *authorization) LogIn(w http.ResponseWriter, r *http.Request) {
 	var authData domain.AuthorizationData
 	if err = d.Decode(&authData); err != nil {
 		errwriter.WriteHTTPError(w, err, http.StatusBadRequest, logErrPrefix)
+		return
+	}
+
+	if authData.Login == "" || authData.Password == "" {
+		errwriter.WriteHTTPError(w, appErrors.ErrNoLoginOrPassword, http.StatusBadRequest, logErrPrefix)
 		return
 	}
 

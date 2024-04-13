@@ -334,18 +334,37 @@ func (r *banner) UpdateBanner(ctx context.Context, bannerID int, banner domain.B
 			return err
 		}
 
-		for _, tagID := range banner.TagIDs {
-			tag, err := tx.Exec(ctx, "INSERT INTO banner_version_tags (version_id, tag) VALUES ($1, $2)", newVersionID, tagID)
+		if banner.TagIDs != nil {
+			for _, tagID := range banner.TagIDs {
+				tag, err := tx.Exec(ctx, "INSERT INTO banner_version_tags (version_id, tag) VALUES ($1, $2)", newVersionID, tagID)
+				if err != nil {
+					return err
+				}
+
+				if tag.RowsAffected() == 0 {
+					return appErrors.ErrNoRowsAffected
+				}
+
+				_, err = tx.Exec(ctx, "INSERT INTO chosen_versions (banner_id, version_id, feature, tag) SELECT $1, $2, COALESCE($3, bv.feature), $4 FROM banner_versions bv WHERE bv.version_id = $5", bannerID, newVersionID, banner.FeatureID, tagID, versionID)
+				if err != nil {
+					var pgErr *pgconn.PgError
+					if errors.As(err, &pgErr); pgErr.Code == pgerrcode.UniqueViolation {
+						return appErrors.ErrBannerTagUniqueViolation
+					}
+
+					return err
+				}
+			}
+		} else {
+			_, err := tx.Exec(ctx, "INSERT INTO banner_version_tags (version_id, tag) SELECT $1, tag FROM banner_version_tags WHERE version_id = $2", newVersionID, versionID)
 			if err != nil {
+				logger.Logger().Infoln("first", err)
 				return err
 			}
 
-			if tag.RowsAffected() == 0 {
-				return appErrors.ErrNoRowsAffected
-			}
-
-			_, err = tx.Exec(ctx, "INSERT INTO chosen_versions (banner_id, version_id, feature, tag) SELECT $1, $2, COALESCE($3, bv.feature), $4 FROM banner_versions bv WHERE bv.version_id = $5", bannerID, newVersionID, banner.FeatureID, tagID, versionID)
+			_, err = tx.Exec(ctx, "INSERT INTO chosen_versions (banner_id, version_id, feature, tag) SELECT $1, $2, COALESCE($3, bv.feature), bvt.tag FROM banner_versions bv JOIN banner_version_tags bvt ON bv.version_id = bvt.version_id WHERE bv.version_id = $4", bannerID, newVersionID, banner.FeatureID, versionID)
 			if err != nil {
+				logger.Logger().Infoln("second", err)
 				var pgErr *pgconn.PgError
 				if errors.As(err, &pgErr); pgErr.Code == pgerrcode.UniqueViolation {
 					return appErrors.ErrBannerTagUniqueViolation

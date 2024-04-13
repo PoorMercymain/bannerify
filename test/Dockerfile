@@ -1,11 +1,11 @@
-FROM golang:latest AS build
+FROM golang:1.22.1 AS build
 WORKDIR /build
 COPY go.mod go.sum ./
 RUN go mod download
 ADD . .
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o cmd/bannerify/bin/main ./cmd/bannerify/
 
-FROM alpine:latest
+FROM alpine:3
 WORKDIR /bannerify
 RUN mkdir /bannerify/logs
 COPY --from=build /build/cmd/bannerify/bin/main .

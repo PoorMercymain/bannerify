@@ -2,7 +2,7 @@ version: '3.9'
 services:
   postgres:
     image: postgres:latest
-    container_name: bannerify-postgres-test
+    container_name: bannerify-postgres-e2e
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -17,7 +17,7 @@ services:
     command: [ "postgres", "-c", "log_statement=all" ]
 
   redis:
-    container_name: bannerify-redis-test
+    container_name: bannerify-redis-e2e
     image: "redis:latest"
     command: ["redis-server", "--maxmemory", "100mb", "--maxmemory-policy", "allkeys-lru"]
     ports:
@@ -30,7 +30,7 @@ services:
       start_period: 10s
 
   bannerify:
-    container_name: bannerify-test
+    container_name: bannerify-e2e
     build:
       context: .
       dockerfile: test/Dockerfile
@@ -56,8 +56,7 @@ services:
     ports:
       - "${SERVICE_PORT}:${SERVICE_PORT}"
 
-  test:
-    image: golang:1.22.1
+  e2e:
     build:
       context: .
       dockerfile: test/DockerfileTest
@@ -65,5 +64,5 @@ services:
       - bannerify
     environment:
       - "SERVICE_PORT:${SERVICE_PORT}"
-      - "SERVICE_HOST:${SERVICE_HOST}"
-    command: ["go", "test", "./...", "-count=1"]
+      - "SERVICE_HOST:bannerify-e2e"
+    command: ["go", "test", "./...", "-count=1", "-cover"]
