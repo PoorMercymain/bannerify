@@ -32,3 +32,5 @@ bannerify-postgres/
 
 # Temp log file
 abc_tmp.txt
+
+results.json
