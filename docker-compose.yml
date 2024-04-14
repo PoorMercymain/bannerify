@@ -1,0 +1,57 @@
+version: '3.9'
+services:
+  postgres:
+    image: postgres:latest
+    container_name: bannerify-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - ./bannerify-postgres:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT}:${POSTGRES_PORT}"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"]
+      interval: 7s
+      timeout: 7s
+      retries: 5
+    command: [ "postgres", "-c", "log_statement=all" ]
+
+  redis:
+    image: "redis:latest"
+    command: ["redis-server", "--maxmemory", "250mb", "--maxmemory-policy", "allkeys-lru"]
+    ports:
+      - "${REDIS_PORT}:${REDIS_PORT}"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  bannerify:
+    build:
+      context: .
+    user: "bannerify:grp"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      MIGRATIONS_PATH: ${MIGRATIONS}
+      SERVICE_PORT: ${SERVICE_PORT}
+      SERVICE_HOST: ${SERVICE_HOST}
+      JWT_KEY: ${JWT_KEY}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      LOG_FILE_PATH: ${LOG_FILE_PATH}
+      REDIS_PORT: ${REDIS_PORT}
+    volumes:
+      - "./${MIGRATIONS}:/bannerify/${MIGRATIONS}"
+      - ./logs/:/bannerify/logs:rw
+    ports:
+      - "${SERVICE_PORT}:${SERVICE_PORT}"
