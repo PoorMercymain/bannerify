@@ -10,7 +10,7 @@ export let options = {
     thresholds: {
         http_reqs: ['rate>=1000'],
         http_req_failed: ['rate<=0.0001'],
-        http_req_duration: ['p(99.99)<=50']
+        http_req_duration: ['p(100)<=50']
     }
 };
 
