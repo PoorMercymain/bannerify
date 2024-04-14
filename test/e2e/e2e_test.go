@@ -1,5 +1,4 @@
 //go:build e2e
-
 package e2e
 
 import (
@@ -33,13 +32,6 @@ type testTableElem struct {
 	expectedStatus int
 	requireParsing bool
 	parsedBody interface{}
-}
-
-type banner struct {
-	TagIDs []int `json:"tag_ids"`
-	FeatureID int `json:"feature_id"`
-	Content json.RawMessage `json:"content"`
-	IsActive bool `json:"is_active"`
 }
 
 type bannerListElement struct {
@@ -92,6 +84,95 @@ func sendReq(t *testing.T, client *http.Client, req *http.Request, expectedStatu
 	}
 
 	resp.Body.Close()
+}
+
+func TestPing(t *testing.T) {
+	cfg := e2eConfig{}
+	if err := env.Parse(&cfg); err != nil {
+		t.Fatalf("Failed to parse env: %v", err)
+	}
+
+	client := http.Client{}
+	var adminAuthData, userAuthData auth
+
+	var testTable = []testTableElem {
+		{
+			caseName: "no auth",
+			httpMethod: http.MethodGet,
+			route: "/ping",
+			body: "",
+			headers: [][2]string{},
+			expectedStatus: http.StatusUnauthorized,
+			requireParsing: false,
+			parsedBody: nil,
+		},
+		{
+			caseName: "register admin",
+			httpMethod: http.MethodPost,
+			route: "/register",
+			body: "{\"login\": \"admin0\",\"password\": \"password\"}",
+			headers: [][2]string{{"Content-Type", "application/json"}, {"admin", "true"}},
+			expectedStatus: http.StatusCreated,
+			requireParsing: true,
+			parsedBody: &adminAuthData,
+		},
+		{
+			caseName: "register user",
+			httpMethod: http.MethodPost,
+			route: "/register",
+			body: "{\"login\": \"user0\",\"password\": \"password\"}",
+			headers: [][2]string{{"Content-Type", "application/json"}},
+			expectedStatus: http.StatusCreated,
+			requireParsing: true,
+			parsedBody: &userAuthData,
+		},
+		{
+			caseName: "user token used",
+			httpMethod: http.MethodGet,
+			route: "/ping",
+			body: "",
+			headers: [][2]string{},
+			expectedStatus: http.StatusForbidden,
+			requireParsing: false,
+			parsedBody: nil,
+		},
+		{
+			caseName: "ping ok",
+			httpMethod: http.MethodGet,
+			route: "/ping",
+			body: "",
+			headers: [][2]string{},
+			expectedStatus: http.StatusNoContent,
+			requireParsing: false,
+			parsedBody: nil,
+		},
+		{
+			caseName: "wrong method",
+			httpMethod: http.MethodPost,
+			route: "/ping",
+			body: "",
+			headers: [][2]string{},
+			expectedStatus: http.StatusMethodNotAllowed,
+			requireParsing: false,
+			parsedBody: nil,
+		},
+	}
+
+	var token string
+	for _, testCase := range testTable {
+		t.Log(testCase.caseName)
+
+		if testCase.caseName == "user token used" {
+			token = userAuthData.Token
+		} else {
+			token = adminAuthData.Token
+		}
+
+		req, err := buildRequest(testCase.httpMethod, testCase.route, testCase.body, append(testCase.headers, [2]string{"token", token}), cfg)
+		require.NoError(t, err)
+
+		sendReq(t, &client, req, testCase.expectedStatus, testCase.parsedBody, testCase.requireParsing)
+	}
 }
 
 func TestRegister(t *testing.T) {
@@ -487,7 +568,7 @@ func TestGetBanner(t *testing.T) {
 			httpMethod: http.MethodGet,
 			route: "/user_banner?tag_id=1&feature_id=1",
 			body: "",
-			headers: [][2]string{{"use_last_revision", "true"}},
+			headers: [][2]string{},
 			expectedStatus: http.StatusOK,
 			requireParsing: true,
 			parsedBody: &updatedBanner,
@@ -502,6 +583,10 @@ func TestGetBanner(t *testing.T) {
 			token = userAuthData.Token
 		} else {
 			token = adminAuthData.Token
+		}
+
+		if testCase.caseName == "get updated banner" {
+			testCase.route += "&use_last_revision=true"
 		}
 
 		req, err := buildRequest(testCase.httpMethod, testCase.route, testCase.body, append(testCase.headers, [2]string{"token", token}), cfg)
@@ -915,7 +1000,7 @@ func TestChooseVersion(t *testing.T) {
 			httpMethod: http.MethodGet,
 			route: "/user_banner?tag_id=111&feature_id=111111",
 			body: "",
-			headers: [][2]string{{"use_last_revision", "true"}},
+			headers: [][2]string{},
 			expectedStatus: http.StatusOK,
 			requireParsing: true,
 			parsedBody: &updatedBanner,
@@ -955,7 +1040,7 @@ func TestChooseVersion(t *testing.T) {
 			httpMethod: http.MethodGet,
 			route: "/user_banner?tag_id=111&feature_id=11111",
 			body: "",
-			headers: [][2]string{{"use_last_revision", "true"}},
+			headers: [][2]string{},
 			expectedStatus: http.StatusOK,
 			requireParsing: true,
 			parsedBody: &chosenBanner,
@@ -1015,6 +1100,8 @@ func TestChooseVersion(t *testing.T) {
 			route += "?version_id=" + strconv.Itoa(versions[len(versions)-1].VersionID)
 		} else if name == "choose version which does not exist" {
 			route += "?version_id=" + strconv.Itoa(versions[0].VersionID+1)
+		} else if name == "get updated banner" || name == "get chosen banner" {
+			route += "&use_last_revision=true"
 		}
 
 		req, err := buildRequest(testCase.httpMethod, route, testCase.body, append(testCase.headers, [2]string{"token", token}), cfg)
@@ -1088,7 +1175,7 @@ func TestCreateBanner(t *testing.T) {
 			httpMethod: http.MethodGet,
 			route: "/user_banner?tag_id=42&feature_id=42",
 			body: "",
-			headers: [][2]string{{"use_last_revision", "true"}},
+			headers: [][2]string{},
 			expectedStatus: http.StatusNotFound,
 			requireParsing: false,
 			parsedBody: nil,
@@ -1108,7 +1195,7 @@ func TestCreateBanner(t *testing.T) {
 			httpMethod: http.MethodGet,
 			route: "/user_banner?tag_id=42&feature_id=42",
 			body: "",
-			headers: [][2]string{{"use_last_revision", "true"}},
+			headers: [][2]string{},
 			expectedStatus: http.StatusOK,
 			requireParsing: true,
 			parsedBody: &banner,
@@ -1138,6 +1225,10 @@ func TestCreateBanner(t *testing.T) {
 			token = userAuthData.Token
 		} else {
 			token = adminAuthData.Token
+		}
+
+		if testCase.caseName == "get banner ok" || testCase.caseName == "get non-existent banner" {
+			testCase.route += "&use_last_revision=true"
 		}
 
 		req, err := buildRequest(testCase.httpMethod, testCase.route, testCase.body, append(testCase.headers, [2]string{"token", token}), cfg)
@@ -1444,7 +1535,7 @@ func TestDeleteBanner(t *testing.T) {
 			httpMethod: http.MethodGet,
 			route: "/user_banner?tag_id=500&feature_id=600",
 			body: "",
-			headers: [][2]string{{"use_last_revision", "true"}},
+			headers: [][2]string{},
 			expectedStatus: http.StatusNotFound,
 			requireParsing: false,
 			parsedBody: nil,
@@ -1474,6 +1565,10 @@ func TestDeleteBanner(t *testing.T) {
 			token = userAuthData.Token
 		} else {
 			token = adminAuthData.Token
+		}
+
+		if testCase.caseName == "get deleted banner" {
+			testCase.route += "&use_last_revision=true"
 		}
 
 		req, err := buildRequest(testCase.httpMethod, testCase.route, testCase.body, append(testCase.headers, [2]string{"token", token}), cfg)
@@ -1708,7 +1803,7 @@ func TestDeleteBannerByTagOrFeature(t *testing.T) {
 			httpMethod: http.MethodGet,
 			route: "/user_banner?tag_id=500&feature_id=600",
 			body: "",
-			headers: [][2]string{{"use_last_revision", "true"}},
+			headers: [][2]string{},
 			expectedStatus: http.StatusNotFound,
 			requireParsing: false,
 			parsedBody: nil,
@@ -1718,7 +1813,7 @@ func TestDeleteBannerByTagOrFeature(t *testing.T) {
 			httpMethod: http.MethodGet,
 			route: "/user_banner?tag_id=851&feature_id=750",
 			body: "",
-			headers: [][2]string{{"use_last_revision", "true"}},
+			headers: [][2]string{},
 			expectedStatus: http.StatusNotFound,
 			requireParsing: false,
 			parsedBody: nil,
@@ -1739,6 +1834,7 @@ func TestDeleteBannerByTagOrFeature(t *testing.T) {
 		t.Log(testCase.caseName)
 
 		if testCase.caseName == "get deleted banner" {
+			testCase.route += "&use_last_revision=true"
 			<-time.After(time.Millisecond * 30)
 		}
 

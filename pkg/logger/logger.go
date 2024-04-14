@@ -27,6 +27,8 @@ func Logger() *logger {
 		cfg := zap.NewProductionConfig()
 		cfg.OutputPaths = []string{log.logFile, "stdout"}
 
+		cfg.Level = zap.NewAtomicLevelAt(zap.WarnLevel) // for load testing
+
 		var logger *zap.Logger
 		logger, err = cfg.Build()
 		if err != nil {

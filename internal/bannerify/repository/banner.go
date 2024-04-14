@@ -314,7 +314,6 @@ func (r *bannerCreator) CreateBanner(ctx context.Context, banner domain.Banner) 
 				return appErrors.ErrNoRowsAffected
 			}
 
-			logger.Logger().Infoln(tagID)
 			_, err = tx.Exec(ctx, "INSERT INTO chosen_versions (banner_id, version_id, feature, tag) VALUES ($1, $2, $3, $4)", bannerID, versionID, banner.FeatureID, tagID)
 			if err != nil {
 				var pgErr *pgconn.PgError

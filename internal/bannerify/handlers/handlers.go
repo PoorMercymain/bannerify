@@ -69,11 +69,12 @@ func (h *bannerGetter) GetBanner(isAdmin bool) http.HandlerFunc {
 		}
 
 		var dbRequired bool
-		if r.Header.Get("use_last_revision") == "true" {
+
+		if r.URL.Query().Get("use_last_revision") == "true" {
 			dbRequired = true
-		} else if r.Header.Get("use_last_revision") == "false" {
+		} else if r.URL.Query().Get("use_last_revision") == "false" {
 			dbRequired = false
-		} else if r.Header.Get("use_last_revision") != "" {
+		} else if r.URL.Query().Get("use_last_revision") != "" {
 			errwriter.WriteHTTPError(w, appErrors.ErrUseLastRevisionNotBool, http.StatusBadRequest, logErrPrefix)
 			return
 		}
@@ -169,10 +170,6 @@ func (h *bannerGetter) ListBanners(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Add("Content-Type", "application/json")
-	if len(banners) == 0 {
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
 
 	w.WriteHeader(http.StatusOK)
 
@@ -301,7 +298,7 @@ func (h *bannerVersioner) ChooseVersion(w http.ResponseWriter, r *http.Request) 
 	err = h.srv.ChooseVersion(r.Context(), bannerID, versionID)
 	if err != nil {
 		if errors.Is(err, appErrors.ErrBannerTagUniqueViolation) {
-			errwriter.WriteHTTPError(w, appErrors.ErrBannerTagUniqueViolation, http.StatusConflict, logErrPrefix)
+			w.WriteHeader(http.StatusConflict)
 			return
 		}
 
@@ -417,6 +414,16 @@ func (h *bannerUpdater) UpdateBanner(w http.ResponseWriter, r *http.Request) {
 
 	err = h.srv.UpdateBanner(r.Context(), bannerID, banner)
 	if err != nil {
+		if errors.Is(err, appErrors.ErrBannerTagUniqueViolation) {
+			errwriter.WriteHTTPError(w, appErrors.ErrBannerTagUniqueViolation, http.StatusBadRequest, logErrPrefix)
+			return
+		}
+
+		if errors.Is(err, appErrors.ErrBannerNotFound) || errors.Is(err, appErrors.ErrVersionNotFound) {
+			errwriter.WriteHTTPError(w, appErrors.ErrBannerNotFound, http.StatusNotFound, logErrPrefix)
+			return
+		}
+
 		logger.Logger().Errorln(logErrPrefix, err.Error())
 		errwriter.WriteHTTPError(w, err, http.StatusInternalServerError, logErrPrefix)
 		return
@@ -560,19 +567,19 @@ func (h *authorization) Register(w http.ResponseWriter, r *http.Request) {
 	err = h.srv.Register(r.Context(), authData.Login, authData.Password, isAdmin)
 	if err != nil {
 		if errors.Is(err, appErrors.ErrAlreadyRegistered) {
-			errwriter.WriteHTTPError(w, appErrors.ErrAlreadyRegistered, http.StatusConflict, logErrPrefix)
+			w.WriteHeader(http.StatusConflict)
 			return
 		}
 
 		logger.Logger().Errorln(logErrPrefix, err)
-		w.WriteHeader(http.StatusInternalServerError)
+		errwriter.WriteHTTPError(w, err, http.StatusInternalServerError, logErrPrefix)
 		return
 	}
 
 	tokenStr, err := jwt.CreateJWT(isAdmin, []byte(h.JWTKey), time.Now().Add(24*time.Hour))
 	if err != nil {
 		logger.Logger().Errorln(logErrPrefix, err)
-		w.WriteHeader(http.StatusInternalServerError)
+		errwriter.WriteHTTPError(w, err, http.StatusInternalServerError, logErrPrefix)
 		return
 	}
 
@@ -612,7 +619,7 @@ func (h *authorization) LogIn(w http.ResponseWriter, r *http.Request) {
 	err = h.srv.CheckAuth(r.Context(), authData.Login, authData.Password)
 	if err != nil {
 		if errors.Is(err, appErrors.ErrUserNotFound) {
-			errwriter.WriteHTTPError(w, appErrors.ErrUserNotFound, http.StatusNotFound, logErrPrefix)
+			w.WriteHeader(http.StatusNotFound)
 			return
 		}
 
@@ -622,28 +629,26 @@ func (h *authorization) LogIn(w http.ResponseWriter, r *http.Request) {
 		}
 
 		logger.Logger().Errorln(logErrPrefix, err)
-		w.WriteHeader(http.StatusInternalServerError)
+		errwriter.WriteHTTPError(w, err, http.StatusInternalServerError, logErrPrefix)
 		return
 	}
 
 	isAdmin, err := h.srv.IsAdmin(r.Context(), authData.Login)
 	if err != nil {
 		if errors.Is(err, appErrors.ErrUserNotFound) {
-			errwriter.WriteHTTPError(w, appErrors.ErrUserNotFound, http.StatusNotFound, logErrPrefix)
+			w.WriteHeader(http.StatusNotFound)
 			return
 		}
 
 		logger.Logger().Errorln(logErrPrefix, err)
-		w.WriteHeader(http.StatusInternalServerError)
+		errwriter.WriteHTTPError(w, err, http.StatusInternalServerError, logErrPrefix)
 		return
 	}
 
-	logger.Logger().Infoln(isAdmin)
 	tokenStr, err := jwt.CreateJWT(isAdmin, []byte(h.JWTKey), time.Now().Add(24*time.Hour))
 	if err != nil {
 		logger.Logger().Errorln(logErrPrefix, err)
-
-		w.WriteHeader(http.StatusInternalServerError)
+		errwriter.WriteHTTPError(w, err, http.StatusInternalServerError, logErrPrefix)
 		return
 	}
 

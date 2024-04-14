@@ -33,6 +33,8 @@ issues:
   - path: ./
     linters:
     - typecheck
+  exclude-dirs:
+    - "docs"
 
 linters-settings:
   errcheck:

@@ -7,12 +7,16 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
 
+	"github.com/PoorMercymain/bannerify/docs"
 	"github.com/caarlos0/env/v6"
 	"github.com/golang-migrate/migrate/v4"
+	"github.com/swaggo/http-swagger"
+	"github.com/swaggo/swag"
 	"go.uber.org/zap"
 
 	"github.com/PoorMercymain/bannerify/internal/bannerify/config"
@@ -30,6 +34,24 @@ func main() {
 	}
 
 	logger.SetLogFile("logs/" + cfg.LogFilePath)
+
+	swaggerConf := config.SwaggerConfig{}
+	swaggerConf.Port = cfg.ServicePort
+
+	var SwaggerInfo = &swag.Spec{
+		Version:          "1.1",
+		Host:             "localhost:" + strconv.Itoa(swaggerConf.Port),
+		BasePath:         "/",
+		Schemes:          []string{"http"},
+		Title:            "Сервис баннеров",
+		Description:      "API для управления баннерами",
+		InfoInstanceName: "swagger",
+		SwaggerTemplate:  docs.DocTemplate,
+		LeftDelim:        "{{",
+		RightDelim:       "}}",
+	}
+
+	swag.Register(SwaggerInfo.InstanceName(), SwaggerInfo)
 
 	m, err := migrate.New("file://"+cfg.MigrationsPath, cfg.DSN())
 	if err != nil {
@@ -100,6 +122,8 @@ func main() {
 	mux.Handle("PATCH /banner/{id}", middleware.Log(middleware.AdminRequired(http.HandlerFunc(updaterHandler.UpdateBanner), authHandler.JWTKey)))
 	mux.Handle("DELETE /banner/{id}", middleware.Log(middleware.AdminRequired(http.HandlerFunc(deleterHandler.DeleteBannerByID), authHandler.JWTKey)))
 	mux.Handle("DELETE /banner", middleware.Log(middleware.AdminRequired(http.HandlerFunc(deleterHandler.DeleteBannerByTagOrFeature(deleteCtx, &wg)), authHandler.JWTKey)))
+	mux.Handle("/swagger/*", httpSwagger.WrapHandler)
+
 
 	server := &http.Server{
 		Addr:     fmt.Sprintf("%s:%d", cfg.ServiceHost, cfg.ServicePort),
