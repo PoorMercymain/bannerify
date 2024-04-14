@@ -46,7 +46,7 @@
 Создаем `.env` файл на основе `.env.example` (или переименовываем `.env.example` в `.env`) в корне проекта, прописываем docker-compose up или make up. При конфигурации из `.env.example` сервис будет доступен на `localhost:8080`
 
 ## E2E тесты
-Для e2e тестов используется отдельный набор контейнеров. Для него лучше использовать отдельный `.env`. Чтобы запустить тесты, используйте команду make test-service, или же просто команды из Makefile для test-service. Тесты проводятся над каждым эндпойнтом.
+Для e2e тестов используется отдельный набор контейнеров. Для него лучше использовать отдельный `.env`. Чтобы запустить тесты, используйте команду make test-service, или же просто команды из Makefile для test-service. Тесты проводятся над каждым эндпойнтом. Для e2e тестов указан тег сборки, и их код находится в `test/e2e/e2e_test.go`
 
 ## Конфигурация линтера
 Кофигурация `golangci-lint` указана в файле `.golangci.yml`. В основном там отключены deprecated линтеры, но также отключен typecheck (но то, что ему не нравится, если бы было правдой, не позволяло бы запустить сервис), а еще tagliatelle хочет теги в стиле, противоречащем ТЗ, так что тоже отключен
@@ -57,7 +57,7 @@
 ![изображение](https://github.com/PoorMercymain/bannerify/assets/67076111/db841c6f-b386-4805-87b2-0cffaabf829e)
 
 ## Эндпойнты
-Описание всех эндпойнтов после запуска сервиса можно найти на `localhost:8080/swagger/` (по умолчанию).
+Подробное описание всех эндпойнтов после запуска сервиса можно найти на `localhost:8080/swagger/` (по умолчанию). Также в файле `bannerify.postman_collection.json` есть примеры запросов.
 
 ![Swagger UI](https://github.com/PoorMercymain/bannerify/assets/67076111/5c950094-fde9-4fa4-92ab-b9e1288bf149)
 
@@ -85,22 +85,28 @@
 
 Для обновления баннера можно использовать эндпойнт `PATCH /banner/{id}`.
 
+![изображение](https://github.com/PoorMercymain/bannerify/assets/67076111/986cece5-f99c-4d94-8be6-32bede35e3f2)
 
 
 При обновлении создается новая версия. Для того, чтобы выбрать версию, можно использовать эндпойнт `PATCH /banner_versions/choose/{banner_id}` с `version_id` в query.
 
-
+![изображение](https://github.com/PoorMercymain/bannerify/assets/67076111/bb890929-34d0-45ed-9094-eb421bf6ef9f)
 
 Чтобы узнать `version_id`, нужно обратиться к списку версий баннера, доступному на `GET /banner_versions/{banner_id}`. По умолчанию он выдает до трех версий, но можно и больше, если указать в query limit больше трех.
 
-
+![изображение](https://github.com/PoorMercymain/bannerify/assets/67076111/c2e783b9-1dc2-4902-b50a-1c757f4f3eb4)
 
 Для удаления баннера используется эндпойнт `DELETE /banner/{banner_id}`.
 
+![изображение](https://github.com/PoorMercymain/bannerify/assets/67076111/96a14e7d-5625-460b-947e-fc9b05f902b0)
 
 
 Для удаления баннеров по tag_id или feature_id можно использовать эндпойнт `DELETE /banner` с tag_id/feature_id в query. Тут выдается 202, т.к. на сервере создается горутина для удаления (число единовременно удаляющих горутин ограничено семафором)
 
+![изображение](https://github.com/PoorMercymain/bannerify/assets/67076111/df5d17eb-b87f-402b-a6f3-8f793884d743)
 
 
 Для проверки работоспособности сервиса можно использовать эндпойнт `GET /ping`.
+
+![изображение](https://github.com/PoorMercymain/bannerify/assets/67076111/351a74fb-d630-452a-ba35-91ca440326f5)
+
