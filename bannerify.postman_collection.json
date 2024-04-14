@@ -1,0 +1,364 @@
+{
+	"info": {
+		"_postman_id": "8f579024-d156-48c0-8e76-a05272899164",
+		"name": "bannerify",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "29849684"
+	},
+	"item": [
+		{
+			"name": "ping",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "token",
+						"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MTI1MjE0MDMsImlzQWRtaW4iOnRydWV9.aJZjWuM1M7rgwfACaE27A7Wnjd07pdOH3ygL8vPAEaY",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "localhost:8080/ping",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"ping"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "register-admin",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "admin",
+						"value": "true",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"login\": \"bob\",\r\n    \"password\": \"be\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "localhost:8081/register",
+					"host": [
+						"localhost"
+					],
+					"port": "8081",
+					"path": [
+						"register"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "register",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"login\": \"o\",\r\n    \"password\": \"e\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "localhost:8080/register",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"register"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "aquire-token",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"login\": \"o\",\r\n    \"password\": \"e\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "localhost:8080/acquire-token",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"acquire-token"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "user_banner",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "token",
+						"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MTI1MjY3MDAsImlzQWRtaW4iOmZhbHNlfQ.safmjzA39-POQ8xRrwGgLCFHWK_VJ3pXK6UATU-x_wQ",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "localhost:8080/user_banner?tag_id=1&feature_id=1",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"user_banner"
+					],
+					"query": [
+						{
+							"key": "tag_id",
+							"value": "1"
+						},
+						{
+							"key": "feature_id",
+							"value": "1"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "banner",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "token",
+						"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MTMwMzA5NjMsImlzQWRtaW4iOnRydWV9.kLHl1g87UvDmEHY65t2ISQYtYZWb0S7-nHxdxwbeof0",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "localhost:8080/banner?tag_id=1",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"banner"
+					],
+					"query": [
+						{
+							"key": "tag_id",
+							"value": "1"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "banner_versions",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "token",
+						"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MTI2MDc2OTMsImlzQWRtaW4iOnRydWV9.W6Or8LHnMyhXifygAZTGwUWJX10rvw1eT7LNe8FYZwQ",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "localhost:8080/banner_versions/1",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"banner_versions",
+						"1"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "choose_version",
+			"request": {
+				"method": "PATCH",
+				"header": [
+					{
+						"key": "token",
+						"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MTI2OTQ3MjMsImlzQWRtaW4iOnRydWV9.U12wEoALSNA1NoJxMq3wDlwYdFYY9s-vkm5hEUHihlo",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "localhost:8080/banner_versions/choose/2?version_id=5",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"banner_versions",
+						"choose",
+						"2"
+					],
+					"query": [
+						{
+							"key": "version_id",
+							"value": "5"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "create_banner",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "token",
+						"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MTI2OTQ3MjMsImlzQWRtaW4iOnRydWV9.U12wEoALSNA1NoJxMq3wDlwYdFYY9s-vkm5hEUHihlo",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"tag_ids\": [\r\n    1, 5\r\n  ],\r\n  \"feature_id\": 10,\r\n  \"content\": {\r\n    \"title\": \"some_title\",\r\n    \"text\": \"some_text\",\r\n    \"url\": \"some_url\"\r\n  },\r\n  \"is_active\": true\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "localhost:8080/banner",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"banner"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "modify_banner",
+			"request": {
+				"method": "PATCH",
+				"header": [
+					{
+						"key": "token",
+						"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MTI5NTQwMzQsImlzQWRtaW4iOnRydWV9.1C9jcMertmYxWjvesMn9MuhiaiByG7rn9CJkbxSzf30",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"content\": {\"abc\": 2}\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "localhost:8080/banner/19",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"banner",
+						"19"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "delete_banner_by_id",
+			"request": {
+				"method": "DELETE",
+				"header": [
+					{
+						"key": "token",
+						"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MTI3ODE0OTIsImlzQWRtaW4iOnRydWV9.jFhomBQJrLHgBJ7VHJByVuR2Kf9fZWkrSULlD9LxdtU",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "localhost:8080/banner/18",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"banner",
+						"18"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "delete_banner_by_tag_or_feature",
+			"request": {
+				"method": "DELETE",
+				"header": [
+					{
+						"key": "token",
+						"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MTI5NTQwMzQsImlzQWRtaW4iOnRydWV9.1C9jcMertmYxWjvesMn9MuhiaiByG7rn9CJkbxSzf30",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "localhost:8080/banner?tag_id=111",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"banner"
+					],
+					"query": [
+						{
+							"key": "tag_id",
+							"value": "111"
+						}
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
